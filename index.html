@@ -1427,21 +1427,40 @@ const App = (() => {
 
   async function regNextStep() {
     const name     = document.getElementById('reg-name').value.trim();
-    const username = document.getElementById('reg-username').value.trim();
+    const username = document.getElementById('reg-username').value.trim().toLowerCase();
     const errEl    = document.getElementById('reg-error-1');
+    const btn      = document.querySelector('#reg-step1 .btn-primary');
     errEl.textContent = '';
 
     if (!name)           { errEl.textContent = 'Enter your name'; return; }
-    if (username.length < 2) { errEl.textContent = 'Username too short (min 2 chars)'; return; }
+    if (username.length < 2) { errEl.textContent = 'Username too short (min 2 characters)'; return; }
     if (!username.match(/^[a-z0-9_]{2,20}$/)) {
-      errEl.textContent = 'Username: letters, numbers, underscores only'; return;
+      errEl.textContent = 'Letters, numbers and underscores only'; return;
     }
-    if (!_usernameOk) {
-      // force a final check if debounce hasn't resolved yet
+
+    // Always do a fresh check — don't rely on debounce state
+    btn.disabled = true;
+    btn.textContent = 'Checking…';
+    try {
       const snap = await rtdb.ref('usernames/' + username).get();
-      if (snap.exists()) { errEl.textContent = 'Username already taken — try another'; return; }
-      _usernameOk = true;
+      if (snap.exists()) {
+        errEl.textContent = 'Username already taken — try another';
+        const statusEl = document.getElementById('username-status');
+        if (statusEl) { statusEl.textContent = '✕ taken'; statusEl.className = 'us-taken'; }
+        btn.disabled = false;
+        btn.textContent = 'Continue →';
+        return;
+      }
+    } catch(e) {
+      errEl.textContent = 'Connection error — please try again';
+      btn.disabled = false;
+      btn.textContent = 'Continue →';
+      return;
     }
+
+    _usernameOk = true;
+    btn.disabled = false;
+    btn.textContent = 'Continue →';
 
     document.getElementById('reg-preview-name').textContent   = name;
     document.getElementById('reg-preview-handle').textContent = '@' + username;
