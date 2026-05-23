@@ -39,6 +39,63 @@
   --trans:     0.18s ease;
 }
 
+/* ── Light theme overrides ── */
+[data-theme="light"] {
+  --bg:        #f4f3ef;
+  --surf:      #ffffff;
+  --surf2:     #f0eeea;
+  --surf3:     #e4e2de;
+  --border:    rgba(0,0,0,0.07);
+  --border2:   rgba(0,0,0,0.13);
+  --border3:   rgba(0,0,0,0.20);
+  --text:      #1a1916;
+  --text2:     #6b6864;
+  --text3:     #aaa8a4;
+  --accent:    #4a9e00;
+  --accent-d:  #3a7e00;
+  --accent-bg: rgba(74,158,0,0.08);
+}
+
+/* Smooth colour transitions on theme switch */
+body, body * { transition: background-color 0.28s ease, border-color 0.28s ease, color 0.28s ease; }
+
+/* ── Theme toggle button ── */
+.theme-toggle {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 300;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 0.5px solid var(--border2);
+  background: var(--surf);
+  color: var(--text2);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.18);
+  padding: 0;
+  flex-shrink: 0;
+}
+.theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Light-mode grid tint */
+[data-theme="light"] .grid-lines {
+  background-image:
+    linear-gradient(rgba(74,158,0,0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(74,158,0,0.06) 1px, transparent 1px);
+}
+[data-theme="light"] .glow-orb {
+  background: radial-gradient(circle, rgba(74,158,0,0.10) 0%, transparent 65%);
+}
+
+/* Light: keep btn-primary readable */
+[data-theme="light"] .btn-primary { color: #ffffff; }
+[data-theme="light"] .modal { box-shadow: 0 8px 40px rgba(0,0,0,0.12); }
+
 html { font-size: 16px; }
 body { background: var(--bg); color: var(--text); font-family: var(--font-d); overflow: hidden; height: 100vh; }
 
@@ -985,6 +1042,9 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- Theme toggle (always on top) -->
+<button class="theme-toggle" id="theme-toggle" onclick="App.toggleTheme()" title="Toggle light / dark mode">🌙</button>
+
 <script>
 /**
  * BatteryShare — DB layer (localStorage-backed, simulates a shared backend)
@@ -1156,17 +1216,20 @@ const DB = (() => {
     if (!req) return { ok: false };
     req.status = accept ? 'accepted' : 'declined';
     if (accept) {
-      const sender = db.users[req.from];
-      const receiver = db.users[req.to];
-      if (!sender || !receiver) { save(db); return { ok: false, error: 'User not found' }; }
-      if (sender.battery < req.amount + 5) { save(db); return { ok: false, error: 'Sender battery too low' }; }
+      // req.from = requester (wants to RECEIVE battery)
+      // req.to   = provider  (will SEND battery, i.e. the currentUser accepting)
+      const requester = db.users[req.from];
+      const provider  = db.users[req.to];
+      if (!requester || !provider) { save(db); return { ok: false, error: 'User not found' }; }
+      if (provider.battery < req.amount + 5) { save(db); return { ok: false, error: 'Not enough battery (keep at least 5%)' }; }
       const overhead = req.amount * 0.02;
       const received = +(req.amount - overhead).toFixed(1);
-      sender.battery   = Math.max(0, +(sender.battery - req.amount).toFixed(1));
-      receiver.battery = Math.min(100, +(receiver.battery + received).toFixed(1));
-      sender.totalGiven    = +(sender.totalGiven + req.amount).toFixed(1);
-      receiver.totalReceived = +(receiver.totalReceived + received).toFixed(1);
-      db.transfers.push({ id: uid(), from: req.from, to: req.to, amount: req.amount, received, ts: Date.now() });
+      provider.battery         = Math.max(0,   +(provider.battery  - req.amount).toFixed(1));
+      requester.battery        = Math.min(100, +(requester.battery + received).toFixed(1));
+      provider.totalGiven      = +(provider.totalGiven    + req.amount).toFixed(1);
+      requester.totalReceived  = +(requester.totalReceived + received).toFixed(1);
+      // transfer log: from = provider (who sent), to = requester (who received)
+      db.transfers.push({ id: uid(), from: req.to, to: req.from, amount: req.amount, received, ts: Date.now() });
     }
     save(db);
     return { ok: true };
@@ -1238,6 +1301,26 @@ const App = (() => {
   let pollInterval = null;
   let deviceBattery = null;   // real device battery %
   let deviceCharging = false;
+
+  /* ══════════════════════════════════
+     THEME
+  ══════════════════════════════════ */
+  let isDark = localStorage.getItem('bshare_theme') !== 'light';
+
+  function applyTheme() {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const btn = document.getElementById('theme-toggle');
+    if (btn) btn.textContent = isDark ? '🌙' : '☀️';
+  }
+
+  function toggleTheme() {
+    isDark = !isDark;
+    localStorage.setItem('bshare_theme', isDark ? 'dark' : 'light');
+    applyTheme();
+  }
+
+  // Apply immediately on load
+  applyTheme();
 
   /* ══════════════════════════════════
      UTILS
@@ -1492,8 +1575,9 @@ const App = (() => {
     const amount = parseInt(document.getElementById('send-slider').value);
     const overhead = +(amount * 0.02).toFixed(1);
     const recv    = +(amount - overhead).toFixed(1);
+    const afterBattery = Math.max(0, +(currentUser.battery - amount).toFixed(1));
     document.getElementById('send-note').textContent =
-      `⚡ ${overhead}% overhead · they receive ${recv}%`;
+      `⚡ ${overhead}% overhead · they receive ${recv}% · your battery: ${currentUser.battery}% → ${afterBattery}%`;
     document.getElementById('send-amount-val').textContent = amount + '%';
     document.getElementById('send-btn').textContent = `Send ${amount}% →`;
     const toId = document.getElementById('send-to').value;
@@ -1504,10 +1588,18 @@ const App = (() => {
     const toId  = document.getElementById('send-to').value;
     const amount = parseInt(document.getElementById('send-slider').value);
     if (!toId) { toast('Pick a contact first'); return; }
+    const prevBattery = currentUser.battery;
     const res = DB.transfer(currentUser.id, toId, amount);
     if (!res.ok) { toast('⚠ ' + res.error); return; }
     currentUser = DB.refreshUser(currentUser.id);
-    toast(`✓ Sent ${amount}% to ${res.receiver.name}!`);
+    // Flash the header battery shell to highlight the change
+    const shell = document.getElementById('hb-shell');
+    if (shell) {
+      shell.style.transition = 'box-shadow 0.15s ease';
+      shell.style.boxShadow = '0 0 0 2px var(--danger)';
+      setTimeout(() => { shell.style.boxShadow = ''; }, 600);
+    }
+    toast(`⚡ Sent ${amount}% → ${res.receiver.name}  (you: ${prevBattery}% → ${currentUser.battery}%)`);
     renderAll();
   }
 
@@ -1797,10 +1889,18 @@ const App = (() => {
   }
 
   function acceptCharge(reqId) {
+    const prevBattery = currentUser.battery;
     const res = DB.respondChargeRequest(reqId, true, currentUser.id);
     if (!res.ok) { toast('⚠ ' + (res.error || 'Failed')); return; }
     currentUser = DB.refreshUser(currentUser.id);
-    toast('⚡ Charge sent!');
+    // Flash the header battery shell to highlight the change
+    const shell = document.getElementById('hb-shell');
+    if (shell) {
+      shell.style.transition = 'box-shadow 0.15s ease';
+      shell.style.boxShadow = '0 0 0 2px var(--danger)';
+      setTimeout(() => { shell.style.boxShadow = ''; }, 600);
+    }
+    toast(`⚡ Charge sent!  (you: ${prevBattery}% → ${currentUser.battery}%)`);
     renderAll();
   }
 
@@ -1876,6 +1976,7 @@ const App = (() => {
     openModal, closeModal,
     openInviteModal, copyInvite, shareViaWhatsApp, shareViaSMS,
     renderAll,
+    toggleTheme,
   };
 
 })();
