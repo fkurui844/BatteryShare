@@ -963,7 +963,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
         <h2>Welcome back</h2>
         <div class="field">
           <label>Username</label>
-          <input type="text" id="login-username" placeholder="your_handle"
+          <input type="text" id="login-username" placeholder="your_username"
             autocomplete="username" autocapitalize="none" spellcheck="false"
             oninput="this.value=this.value.toLowerCase()"
             onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"/>
@@ -980,13 +980,6 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
         <div class="field-error" id="login-error"></div>
         <button class="btn-primary" id="login-btn" onclick="App.login()">Sign in →</button>
         <p class="auth-switch">No account? <a onclick="App.showRegister()">Create one free</a></p>
-        <p class="auth-demo">— or jump in with a demo —</p>
-        <div class="demo-chips">
-          <button class="chip" onclick="App.demoLogin('amani')">⚡ Amani</button>
-          <button class="chip" onclick="App.demoLogin('kofi')">⚡ Kofi</button>
-          <button class="chip" onclick="App.demoLogin('njeri')">⚡ Njeri</button>
-          <button class="chip" onclick="App.demoLogin('daudi')">⚡ Daudi</button>
-        </div>
       </div>
 
       <!-- Register form -->
