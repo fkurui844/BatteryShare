@@ -1,549 +1,1761 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>BatteryShare — Transfer Your Charge</title>
+  <title>BatteryShare</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+/* ═══════════════════════════════════════
+   BatteryShare — stylesheet
+   Dark industrial + acid green
+═══════════════════════════════════════ */
 
-    :root {
-      --bg: #0a0a0a;
-      --surface: #111111;
-      --surface2: #1a1a1a;
-      --border: rgba(255,255,255,0.08);
-      --border-bright: rgba(255,255,255,0.18);
-      --text: #f0ede8;
-      --muted: #6b6b6b;
-      --accent: #b6ff6a;
-      --accent-dim: rgba(182,255,106,0.12);
-      --danger: #ff4f4f;
-      --warn: #ffb347;
-      --radius: 16px;
-      --font-display: 'Syne', sans-serif;
-      --font-mono: 'DM Mono', monospace;
-    }
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    html { font-size: 16px; }
+:root {
+  --bg:        #080808;
+  --surf:      #101010;
+  --surf2:     #181818;
+  --surf3:     #222222;
+  --border:    rgba(255,255,255,0.07);
+  --border2:   rgba(255,255,255,0.14);
+  --border3:   rgba(255,255,255,0.22);
+  --text:      #edeae4;
+  --text2:     #888580;
+  --text3:     #444240;
+  --accent:    #b6ff6a;
+  --accent-d:  #8fd44e;
+  --accent-bg: rgba(182,255,106,0.08);
+  --danger:    #ff5252;
+  --warn:      #ffb347;
+  --info:      #52b8ff;
+  --rad:       14px;
+  --rad-sm:    8px;
+  --sidebar-w: 60px;
+  --font-d:    'Syne', sans-serif;
+  --font-m:    'DM Mono', monospace;
+  --trans:     0.18s ease;
+}
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: var(--font-display);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      padding: 2rem 1rem 4rem;
-      position: relative;
-      overflow-x: hidden;
-    }
+html { font-size: 16px; }
+body { background: var(--bg); color: var(--text); font-family: var(--font-d); overflow: hidden; height: 100vh; }
 
-    body::before {
-      content: '';
-      position: fixed;
-      top: -30%;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 600px;
-      height: 600px;
-      background: radial-gradient(circle, rgba(182,255,106,0.06) 0%, transparent 70%);
-      pointer-events: none;
-      z-index: 0;
-    }
+/* ── Screens ── */
+.screen { position: fixed; inset: 0; display: none; }
+.screen.active { display: flex; }
 
-    .wrapper {
-      width: 100%;
-      max-width: 480px;
-      position: relative;
-      z-index: 1;
-    }
+/* ════════════════════════════════
+   AUTH
+════════════════════════════════ */
+#screen-auth {
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  overflow: hidden;
+}
 
-    /* ── Header ── */
-    header {
-      text-align: center;
-      margin-bottom: 2.5rem;
-      padding-top: 1rem;
-    }
+.auth-bg {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
 
-    .logo {
-      display: inline-flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 0.75rem;
-    }
+.grid-lines {
+  position: absolute;
+  inset: -50%;
+  background-image:
+    linear-gradient(rgba(182,255,106,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(182,255,106,0.04) 1px, transparent 1px);
+  background-size: 48px 48px;
+  transform: perspective(600px) rotateX(20deg);
+  transform-origin: center bottom;
+}
 
-    .logo-icon {
-      width: 36px;
-      height: 36px;
-      border: 1.5px solid var(--accent);
-      border-radius: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-    }
+.glow-orb {
+  position: absolute;
+  top: -20%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(182,255,106,0.09) 0%, transparent 65%);
+  animation: orb-pulse 4s ease-in-out infinite;
+}
 
-    .logo-text {
-      font-size: 22px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      color: var(--text);
-    }
+@keyframes orb-pulse {
+  0%,100% { opacity: 0.6; transform: translateX(-50%) scale(1); }
+  50%      { opacity: 1;   transform: translateX(-50%) scale(1.1); }
+}
 
-    .logo-text span { color: var(--accent); }
+.auth-wrap {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: 400px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2.5rem;
+}
 
-    header p {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--muted);
-      letter-spacing: 0.04em;
-    }
+.brand { text-align: center; }
 
-    /* ── Phones row ── */
-    .phones {
-      display: grid;
-      grid-template-columns: 1fr 48px 1fr;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 1.5rem;
-    }
+.brand-bolt {
+  font-size: 2.5rem;
+  line-height: 1;
+  margin-bottom: 0.5rem;
+  animation: bolt-flicker 3s ease-in-out infinite;
+}
 
-    .phone-card {
-      background: var(--surface);
-      border: 0.5px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem 1rem;
-      text-align: center;
-      transition: border-color 0.3s;
-    }
+@keyframes bolt-flicker {
+  0%,90%,100% { opacity: 1; }
+  92%          { opacity: 0.5; }
+  94%          { opacity: 1; }
+  96%          { opacity: 0.3; }
+}
 
-    .phone-card.sender { border-color: var(--border-bright); }
+.brand h1 {
+  font-size: 2.2rem;
+  font-weight: 800;
+  letter-spacing: -1px;
+  color: var(--text);
+}
 
-    .label {
-      font-family: var(--font-mono);
-      font-size: 10px;
-      letter-spacing: 0.1em;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 6px;
-    }
+.brand h1 span { color: var(--accent); }
 
-    .phone-name {
-      font-size: 14px;
-      font-weight: 600;
-      color: var(--text);
-      margin-bottom: 14px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+.brand-sub {
+  font-family: var(--font-m);
+  font-size: 11px;
+  color: var(--text3);
+  letter-spacing: 0.05em;
+  margin-top: 6px;
+}
 
-    .battery-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.auth-card {
+  width: 100%;
+  background: var(--surf);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--rad);
+  padding: 1.75rem;
+}
 
-    .battery-shell {
-      position: relative;
-      width: 42px;
-      height: 78px;
-      border: 1.5px solid var(--border-bright);
-      border-radius: 7px;
-    }
+.auth-form h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 1.25rem;
+}
 
-    .battery-shell::before {
-      content: '';
-      position: absolute;
-      top: -8px;
-      left: 50%;
-      transform: translateX(-50%);
-      width: 14px;
-      height: 7px;
-      background: var(--border-bright);
-      border-radius: 3px 3px 0 0;
-    }
+.field { margin-bottom: 1rem; }
 
-    .battery-fill {
-      position: absolute;
-      bottom: 2px;
-      left: 2px;
-      right: 2px;
-      border-radius: 4px;
-      transition: height 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
-    }
+.field label, .field-label {
+  display: block;
+  font-family: var(--font-m);
+  font-size: 11px;
+  color: var(--text2);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
 
-    .battery-pct {
-      font-family: var(--font-mono);
-      font-size: 20px;
-      font-weight: 500;
-      color: var(--text);
-    }
+input[type=text],
+input[type=password],
+.select-field {
+  width: 100%;
+  background: var(--surf2);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--rad-sm);
+  color: var(--text);
+  font-family: var(--font-m);
+  font-size: 13px;
+  padding: 10px 12px;
+  outline: none;
+  transition: border-color var(--trans);
+  appearance: none;
+}
 
-    .arrow-col {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+input[type=text]:focus,
+input[type=password]:focus,
+.select-field:focus { border-color: var(--accent); }
 
-    .arrow-col svg {
-      color: var(--accent);
-      animation: pulse-arrow 1.8s ease-in-out infinite;
-    }
+.field-error {
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--danger);
+  min-height: 18px;
+  margin-bottom: 6px;
+}
 
-    @keyframes pulse-arrow {
-      0%, 100% { opacity: 0.4; transform: translateX(0); }
-      50% { opacity: 1; transform: translateX(4px); }
-    }
+.btn-primary {
+  width: 100%;
+  padding: 11px;
+  background: var(--accent);
+  color: #080808;
+  border: none;
+  border-radius: var(--rad-sm);
+  font-family: var(--font-d);
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  transition: opacity var(--trans), transform var(--trans);
+  margin-top: 4px;
+}
 
-    /* ── Contacts ── */
-    .section-label {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      color: var(--muted);
-      text-transform: uppercase;
-      margin-bottom: 10px;
-    }
+.btn-primary:hover   { opacity: 0.85; }
+.btn-primary:active  { transform: scale(0.98); }
+.btn-primary:disabled { background: var(--surf3); color: var(--text3); cursor: not-allowed; }
 
-    .contacts {
-      display: flex;
-      gap: 8px;
-      flex-wrap: wrap;
-      margin-bottom: 1.5rem;
-    }
+.auth-switch {
+  text-align: center;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--text2);
+  margin-top: 1rem;
+}
 
-    .chip {
-      padding: 7px 14px;
-      border: 0.5px solid var(--border);
-      border-radius: 99px;
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--muted);
-      background: var(--surface);
-      cursor: pointer;
-      transition: all 0.2s;
-    }
+.auth-switch a {
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: underline;
+}
 
-    .chip:hover { border-color: var(--border-bright); color: var(--text); }
-    .chip.active {
-      border-color: var(--accent);
-      color: var(--accent);
-      background: var(--accent-dim);
-    }
+.auth-demo {
+  text-align: center;
+  font-family: var(--font-m);
+  font-size: 11px;
+  color: var(--text3);
+  margin: 1rem 0 0.5rem;
+}
 
-    /* ── Controls ── */
-    .controls {
-      background: var(--surface);
-      border: 0.5px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem;
-      margin-bottom: 1.25rem;
-    }
+.demo-chips {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  flex-wrap: wrap;
+}
 
-    .slider-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 12px;
-    }
+.hidden { display: none !important; }
 
-    .slider-row .key {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--muted);
-    }
+/* ════════════════════════════════
+   MAIN APP SHELL
+════════════════════════════════ */
+#screen-app {
+  flex-direction: row;
+  overflow: hidden;
+}
 
-    .slider-row .val {
-      font-family: var(--font-mono);
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--accent);
-    }
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w);
+  background: var(--surf);
+  border-right: 0.5px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 0;
+  flex-shrink: 0;
+}
 
-    input[type=range] {
-      -webkit-appearance: none;
-      width: 100%;
-      height: 4px;
-      background: var(--surface2);
-      border-radius: 2px;
-      outline: none;
-      margin-bottom: 14px;
-    }
+.sidebar-top { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
 
-    input[type=range]::-webkit-slider-thumb {
-      -webkit-appearance: none;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: var(--accent);
-      cursor: pointer;
-      transition: transform 0.15s;
-    }
+.app-logo {
+  font-family: var(--font-m);
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+  padding: 8px 0;
+  border-bottom: 0.5px solid var(--border);
+  width: 100%;
+  text-align: center;
+}
 
-    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+.sidebar-nav { display: flex; flex-direction: column; gap: 2px; width: 100%; padding: 0 6px; }
 
-    .overhead-note {
-      font-family: var(--font-mono);
-      font-size: 11px;
-      color: var(--muted);
-      margin-bottom: 14px;
-    }
+.nav-btn {
+  width: 100%;
+  aspect-ratio: 1;
+  background: transparent;
+  border: none;
+  border-radius: var(--rad-sm);
+  color: var(--text3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--trans), color var(--trans);
+  position: relative;
+}
 
-    .overhead-note span { color: var(--warn); }
+.nav-btn svg { width: 20px; height: 20px; }
 
-    .transfer-btn {
-      width: 100%;
-      padding: 13px;
-      background: var(--accent);
-      color: #0a0a0a;
-      border: none;
-      border-radius: 10px;
-      font-family: var(--font-display);
-      font-size: 14px;
-      font-weight: 600;
-      letter-spacing: 0.01em;
-      cursor: pointer;
-      transition: opacity 0.2s, transform 0.15s;
-    }
+.nav-btn:hover  { background: var(--surf2); color: var(--text2); }
+.nav-btn.active { background: var(--accent-bg); color: var(--accent); }
 
-    .transfer-btn:hover { opacity: 0.88; }
-    .transfer-btn:active { transform: scale(0.98); }
-    .transfer-btn:disabled {
-      background: var(--surface2);
-      color: var(--muted);
-      cursor: not-allowed;
-      transform: none;
-    }
+.nav-badge {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 7px;
+  height: 7px;
+  background: var(--danger);
+  border-radius: 50%;
+  display: none;
+}
 
-    /* ── Log ── */
-    .log {
-      background: var(--surface);
-      border: 0.5px solid var(--border);
-      border-radius: var(--radius);
-      padding: 1.25rem;
-      display: none;
-    }
+.nav-badge.show { display: block; }
 
-    .log.visible { display: block; }
+.logout-btn { margin-top: auto; color: var(--text3); }
+.logout-btn:hover { color: var(--danger); background: rgba(255,82,82,0.08); }
 
-    .log-entry {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      border-bottom: 0.5px solid var(--border);
-      font-family: var(--font-mono);
-      font-size: 12px;
-    }
+/* ── Main content area ── */
+.main {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+  position: relative;
+}
 
-    .log-entry:last-child { border-bottom: none; }
-    .log-entry .to { color: var(--muted); }
-    .log-entry .to span { color: var(--text); }
-    .log-entry .amt { color: var(--accent); }
+.tab { display: none; padding: 2rem; max-width: 640px; margin: 0 auto; }
+.tab.active { display: block; animation: fade-in 0.2s ease; }
 
-    /* ── Toast ── */
-    .toast {
-      position: fixed;
-      bottom: 28px;
-      left: 50%;
-      transform: translateX(-50%) translateY(20px);
-      background: var(--surface);
-      border: 0.5px solid var(--border-bright);
-      border-radius: 99px;
-      padding: 10px 22px;
-      font-family: var(--font-mono);
-      font-size: 13px;
-      color: var(--text);
-      opacity: 0;
-      transition: opacity 0.3s, transform 0.3s;
-      pointer-events: none;
-      white-space: nowrap;
-      z-index: 999;
-    }
+@keyframes fade-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
-    .toast.show {
-      opacity: 1;
-      transform: translateX(-50%) translateY(0);
-    }
+.tab-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 1.75rem;
+}
 
-    /* ── Responsive ── */
-    @media (max-width: 400px) {
-      .phones { grid-template-columns: 1fr 36px 1fr; gap: 6px; }
-      .phone-card { padding: 1rem 0.75rem; }
-    }
-  </style>
+.tab-header h2 { font-size: 24px; font-weight: 800; letter-spacing: -0.5px; }
+.tab-sub { font-family: var(--font-m); font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+/* ── Stats ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-bottom: 2rem;
+}
+
+.stat-card {
+  background: var(--surf);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  padding: 1rem;
+}
+
+.stat-label { font-family: var(--font-m); font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+.stat-val   { font-family: var(--font-m); font-size: 22px; font-weight: 500; color: var(--accent); }
+
+/* ── Home battery indicator ── */
+.header-battery { display: flex; align-items: center; gap: 10px; }
+
+.hb-shell {
+  width: 28px;
+  height: 50px;
+  border: 1.5px solid var(--border2);
+  border-radius: 5px;
+  position: relative;
+}
+
+.hb-shell::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 5px;
+  background: var(--border2);
+  border-radius: 2px 2px 0 0;
+}
+
+.hb-fill {
+  position: absolute;
+  bottom: 2px;
+  left: 2px;
+  right: 2px;
+  border-radius: 3px;
+  transition: height 0.6s cubic-bezier(0.34,1.56,0.64,1), background 0.4s;
+}
+
+.hb-pct { font-family: var(--font-m); font-size: 15px; font-weight: 500; }
+
+/* ── Section titles ── */
+.section-title {
+  font-family: var(--font-m);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text2);
+  margin-bottom: 10px;
+}
+
+/* ── Send panel ── */
+.send-panel {
+  background: var(--surf);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  padding: 1.25rem;
+}
+
+.send-to-row, .send-amount-row { margin-bottom: 1rem; }
+.accent { color: var(--accent); }
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 3px;
+  background: var(--surf3);
+  border-radius: 2px;
+  outline: none;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  transition: transform 0.15s;
+}
+
+input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
+
+.send-note {
+  font-family: var(--font-m);
+  font-size: 11px;
+  color: var(--text2);
+  margin-bottom: 1rem;
+}
+
+/* ── Online list ── */
+.online-list { display: flex; flex-direction: column; gap: 8px; }
+
+.online-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surf);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  padding: 10px 14px;
+  transition: border-color var(--trans);
+}
+
+.online-card:hover { border-color: var(--border2); }
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+}
+
+.online-info { flex: 1; min-width: 0; }
+.online-name { font-size: 14px; font-weight: 600; }
+.online-handle { font-family: var(--font-m); font-size: 11px; color: var(--text2); }
+
+.online-battery { display: flex; align-items: center; gap: 8px; }
+
+.mini-shell {
+  width: 18px;
+  height: 32px;
+  border: 1.5px solid var(--border2);
+  border-radius: 3px;
+  position: relative;
+  flex-shrink: 0;
+}
+
+.mini-shell::before {
+  content: '';
+  position: absolute;
+  top: -5px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 7px;
+  height: 4px;
+  background: var(--border2);
+  border-radius: 1px 1px 0 0;
+}
+
+.mini-fill {
+  position: absolute;
+  bottom: 1px;
+  left: 1px;
+  right: 1px;
+  border-radius: 2px;
+  transition: height 0.5s ease;
+}
+
+.mini-pct { font-family: var(--font-m); font-size: 12px; color: var(--text2); min-width: 32px; text-align: right; }
+
+.status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  animation: blink 2.5s ease-in-out infinite;
+}
+
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+/* ── Contacts tab ── */
+.search-wrap { position: relative; margin-bottom: 1.25rem; }
+
+.search-results {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--surf);
+  border: 0.5px solid var(--border2);
+  border-top: none;
+  border-radius: 0 0 var(--rad) var(--rad);
+  z-index: 10;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: background var(--trans);
+  border-bottom: 0.5px solid var(--border);
+}
+
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover { background: var(--surf2); }
+
+#contacts-list { display: flex; flex-direction: column; gap: 8px; }
+
+.contact-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: var(--surf);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  padding: 10px 14px;
+  transition: border-color var(--trans);
+}
+
+.contact-card:hover { border-color: var(--border2); }
+
+.contact-info { flex: 1; min-width: 0; }
+.contact-name { font-size: 14px; font-weight: 600; }
+.contact-handle { font-family: var(--font-m); font-size: 11px; color: var(--text2); }
+
+.contact-status {
+  font-family: var(--font-m);
+  font-size: 11px;
+  color: var(--text3);
+}
+
+.contact-status.online { color: var(--accent); }
+
+.contact-actions { display: flex; gap: 6px; }
+
+/* ── Requests tab ── */
+.request-card {
+  background: var(--surf);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad);
+  padding: 12px 14px;
+  margin-bottom: 8px;
+}
+
+.request-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.request-info { flex: 1; }
+.request-name { font-size: 14px; font-weight: 600; }
+.request-meta { font-family: var(--font-m); font-size: 11px; color: var(--text2); }
+
+.request-amount {
+  font-family: var(--font-m);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--accent);
+}
+
+.request-actions { display: flex; gap: 8px; }
+
+/* ── History tab ── */
+#history-list { display: flex; flex-direction: column; gap: 6px; }
+
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--surf);
+  border: 0.5px solid var(--border);
+  border-radius: var(--rad-sm);
+}
+
+.history-left { display: flex; align-items: center; gap: 10px; }
+.history-dir  { font-size: 16px; }
+.history-who  { font-size: 13px; font-weight: 600; }
+.history-time { font-family: var(--font-m); font-size: 11px; color: var(--text2); }
+.history-amt  { font-family: var(--font-m); font-size: 14px; font-weight: 500; }
+.history-amt.sent     { color: var(--danger); }
+.history-amt.received { color: var(--accent); }
+
+/* ── Buttons ── */
+.btn-sm {
+  padding: 7px 14px;
+  background: var(--surf2);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--rad-sm);
+  color: var(--text);
+  font-family: var(--font-d);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--trans), border-color var(--trans);
+}
+
+.btn-sm:hover { background: var(--surf3); border-color: var(--border3); }
+
+.btn-success {
+  padding: 7px 14px;
+  background: var(--accent-bg);
+  border: 0.5px solid var(--accent);
+  border-radius: var(--rad-sm);
+  color: var(--accent);
+  font-family: var(--font-d);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--trans);
+}
+
+.btn-success:hover { background: rgba(182,255,106,0.15); }
+
+.btn-danger {
+  padding: 7px 14px;
+  background: rgba(255,82,82,0.08);
+  border: 0.5px solid var(--danger);
+  border-radius: var(--rad-sm);
+  color: var(--danger);
+  font-family: var(--font-d);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--trans);
+}
+
+.btn-danger:hover { background: rgba(255,82,82,0.15); }
+
+.chip {
+  padding: 6px 12px;
+  border: 0.5px solid var(--border2);
+  border-radius: 99px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--text2);
+  background: var(--surf2);
+  cursor: pointer;
+  transition: all var(--trans);
+}
+
+.chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+.chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-bg); }
+
+.empty-msg {
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--text3);
+  padding: 1rem 0;
+}
+
+/* ── Modal ── */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  backdrop-filter: blur(4px);
+}
+
+.modal {
+  background: var(--surf);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--rad);
+  padding: 1.75rem;
+  width: 100%;
+  max-width: 360px;
+  margin: 1rem;
+  animation: modal-in 0.2s ease;
+}
+
+@keyframes modal-in { from { opacity:0; transform: scale(0.95) translateY(10px); } to { opacity:1; transform: scale(1) translateY(0); } }
+
+.modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 1.25rem; }
+.modal .field { margin-bottom: 1rem; }
+.modal-actions { display: flex; gap: 8px; margin-top: 1rem; }
+.modal-actions .btn-sm { flex: 1; text-align: center; }
+.modal-actions .btn-primary { flex: 1; }
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%) translateY(16px);
+  background: var(--surf);
+  border: 0.5px solid var(--border2);
+  border-radius: 99px;
+  padding: 10px 20px;
+  font-family: var(--font-m);
+  font-size: 13px;
+  color: var(--text);
+  opacity: 0;
+  transition: opacity 0.3s, transform 0.3s;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 200;
+}
+
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* ── Avatar colors ── */
+.av-0 { background: rgba(182,255,106,0.15); color: #b6ff6a; }
+.av-1 { background: rgba(82,184,255,0.15);  color: #52b8ff; }
+.av-2 { background: rgba(255,179,71,0.15);  color: #ffb347; }
+.av-3 { background: rgba(255,82,82,0.15);   color: #ff5252; }
+.av-4 { background: rgba(200,130,255,0.15); color: #c882ff; }
+.av-5 { background: rgba(82,255,180,0.15);  color: #52ffb4; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--surf3); border-radius: 2px; }
+
+/* ── Responsive ── */
+@media (max-width: 520px) {
+  .tab { padding: 1.25rem; }
+  .stats-row { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .stat-val { font-size: 18px; }
+}
+
+</style>
 </head>
 <body>
-<div class="wrapper">
 
-  <header>
-    <div class="logo">
-      <div class="logo-icon">⚡</div>
-      <div class="logo-text">Battery<span>Share</span></div>
+<!-- ══ AUTH SCREEN ══ -->
+<div id="screen-auth" class="screen active">
+  <div class="auth-bg">
+    <div class="grid-lines"></div>
+    <div class="glow-orb"></div>
+  </div>
+  <div class="auth-wrap">
+    <div class="brand">
+      <div class="brand-bolt">⚡</div>
+      <h1>Battery<span>Share</span></h1>
+      <p class="brand-sub">// transfer charge to anyone, instantly</p>
     </div>
-    <p>// transfer your charge to someone who needs it</p>
-  </header>
 
-  <!-- Phones -->
-  <div class="phones">
-    <div class="phone-card sender">
-      <div class="label">You</div>
-      <div class="phone-name">My Phone</div>
-      <div class="battery-wrap">
-        <div class="battery-shell">
-          <div class="battery-fill" id="my-fill"></div>
+    <div class="auth-card" id="auth-card">
+      <!-- Login form -->
+      <div class="auth-form" id="form-login">
+        <h2>Sign in</h2>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="login-username" placeholder="your_handle" autocomplete="username"/>
         </div>
-        <div class="battery-pct" id="my-pct">72%</div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="login-password" placeholder="••••••••"/>
+        </div>
+        <div class="field-error" id="login-error"></div>
+        <button class="btn-primary" onclick="App.login()">Sign in →</button>
+        <p class="auth-switch">No account? <a onclick="App.showRegister()">Create one</a></p>
+        <p class="auth-demo">— or try a demo account —</p>
+        <div class="demo-chips">
+          <button class="chip" onclick="App.demoLogin('amani')">Amani</button>
+          <button class="chip" onclick="App.demoLogin('kofi')">Kofi</button>
+          <button class="chip" onclick="App.demoLogin('njeri')">Njeri</button>
+          <button class="chip" onclick="App.demoLogin('daudi')">Daudi</button>
+        </div>
+      </div>
+
+      <!-- Register form -->
+      <div class="auth-form hidden" id="form-register">
+        <h2>Create account</h2>
+        <div class="field">
+          <label>Display name</label>
+          <input type="text" id="reg-name" placeholder="Amani Kamau"/>
+        </div>
+        <div class="field">
+          <label>Username</label>
+          <input type="text" id="reg-username" placeholder="amani_k"/>
+        </div>
+        <div class="field">
+          <label>Password</label>
+          <input type="password" id="reg-password" placeholder="••••••••"/>
+        </div>
+        <div class="field-error" id="reg-error"></div>
+        <button class="btn-primary" onclick="App.register()">Create account →</button>
+        <p class="auth-switch">Already have one? <a onclick="App.showLogin()">Sign in</a></p>
       </div>
     </div>
-
-    <div class="arrow-col">
-      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="5" y1="12" x2="19" y2="12"/>
-        <polyline points="12 5 19 12 12 19"/>
-      </svg>
-    </div>
-
-    <div class="phone-card">
-      <div class="label">Recipient</div>
-      <div class="phone-name" id="recipient-name">Amani</div>
-      <div class="battery-wrap">
-        <div class="battery-shell">
-          <div class="battery-fill" id="their-fill"></div>
-        </div>
-        <div class="battery-pct" id="their-pct">18%</div>
-      </div>
-    </div>
   </div>
-
-  <!-- Contacts -->
-  <div class="section-label">Send to</div>
-  <div class="contacts" id="contacts"></div>
-
-  <!-- Controls -->
-  <div class="controls">
-    <div class="slider-row">
-      <span class="key">Transfer amount</span>
-      <span class="val" id="amount-out">10%</span>
-    </div>
-    <input type="range" min="1" max="50" value="10" step="1" id="amount-slider">
-    <div class="overhead-note">⚡ <span id="loss-text">0.2% lost in transfer</span> — they receive <span id="receive-text" style="color:var(--text)">9.8%</span></div>
-    <button class="transfer-btn" id="transfer-btn" onclick="doTransfer()">Send 10% to Amani</button>
-  </div>
-
-  <!-- Log -->
-  <div class="log" id="log">
-    <div class="section-label" style="margin-bottom:10px;">Transfer history</div>
-    <div id="log-entries"></div>
-  </div>
-
 </div>
 
+<!-- ══ MAIN APP ══ -->
+<div id="screen-app" class="screen">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-top">
+      <div class="app-logo">⚡ BS</div>
+      <nav class="sidebar-nav">
+        <button class="nav-btn active" data-tab="home" onclick="App.setTab('home')" title="Home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 01-1 1H4a1 1 0 01-1-1V9.5z"/><path d="M9 21V12h6v9"/></svg>
+        </button>
+        <button class="nav-btn" data-tab="contacts" onclick="App.setTab('contacts')" title="Contacts">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 014-4h4a4 4 0 014 4v2"/><path d="M16 3.13a4 4 0 010 7.75"/><path d="M21 21v-2a4 4 0 00-3-3.87"/></svg>
+          <span class="nav-badge" id="contacts-badge"></span>
+        </button>
+        <button class="nav-btn" data-tab="requests" onclick="App.setTab('requests')" title="Requests">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8h1a4 4 0 010 8h-1"/><path d="M2 8h16v9a4 4 0 01-4 4H6a4 4 0 01-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+          <span class="nav-badge" id="requests-badge"></span>
+        </button>
+        <button class="nav-btn" data-tab="history" onclick="App.setTab('history')" title="History">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </button>
+      </nav>
+    </div>
+    <button class="nav-btn logout-btn" onclick="App.logout()" title="Sign out">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+  </aside>
+
+  <!-- Main content -->
+  <main class="main">
+
+    <!-- ── HOME TAB ── -->
+    <div class="tab active" id="tab-home">
+      <div class="tab-header">
+        <div>
+          <h2 id="home-greeting">Good morning</h2>
+          <p class="tab-sub" id="home-username">@username</p>
+        </div>
+        <div class="header-battery">
+          <div class="hb-shell" id="hb-shell">
+            <div class="hb-fill" id="hb-fill"></div>
+          </div>
+          <span class="hb-pct" id="hb-pct">—%</span>
+        </div>
+      </div>
+
+      <div class="stats-row">
+        <div class="stat-card">
+          <div class="stat-label">Given</div>
+          <div class="stat-val" id="stat-given">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Received</div>
+          <div class="stat-val" id="stat-received">0%</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Contacts</div>
+          <div class="stat-val" id="stat-contacts">0</div>
+        </div>
+      </div>
+
+      <div class="section-title">Send charge</div>
+      <div class="send-panel">
+        <div class="send-to-row">
+          <label class="field-label">To</label>
+          <select id="send-to" class="select-field">
+            <option value="">— pick a contact —</option>
+          </select>
+        </div>
+        <div class="send-amount-row">
+          <label class="field-label">Amount <span id="send-amount-val" class="accent">10%</span></label>
+          <input type="range" min="1" max="50" value="10" step="1" id="send-slider"/>
+        </div>
+        <div class="send-note" id="send-note">⚡ 0.2% overhead · they receive 9.8%</div>
+        <button class="btn-primary" id="send-btn" onclick="App.sendCharge()">Send 10% →</button>
+      </div>
+
+      <div class="section-title" style="margin-top:2rem;">Online now</div>
+      <div class="online-list" id="online-list">
+        <p class="empty-msg">Add contacts to see who's online</p>
+      </div>
+    </div>
+
+    <!-- ── CONTACTS TAB ── -->
+    <div class="tab" id="tab-contacts">
+      <div class="tab-header">
+        <h2>Contacts</h2>
+        <button class="btn-sm" onclick="App.openAddContact()">+ Add</button>
+      </div>
+
+      <div class="search-wrap">
+        <input type="text" id="contact-search" placeholder="Search users…" oninput="App.searchUsers(this.value)"/>
+        <div class="search-results" id="search-results"></div>
+      </div>
+
+      <div id="contacts-list">
+        <p class="empty-msg">No contacts yet — search to add someone</p>
+      </div>
+    </div>
+
+    <!-- ── REQUESTS TAB ── -->
+    <div class="tab" id="tab-requests">
+      <div class="tab-header">
+        <h2>Requests</h2>
+      </div>
+
+      <div class="section-title">Incoming</div>
+      <div id="incoming-requests">
+        <p class="empty-msg">No incoming requests</p>
+      </div>
+
+      <div class="section-title" style="margin-top:1.5rem;">Outgoing</div>
+      <div id="outgoing-requests">
+        <p class="empty-msg">No outgoing requests</p>
+      </div>
+    </div>
+
+    <!-- ── HISTORY TAB ── -->
+    <div class="tab" id="tab-history">
+      <div class="tab-header">
+        <h2>History</h2>
+      </div>
+      <div id="history-list">
+        <p class="empty-msg">No transfers yet</p>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ══ MODALS ══ -->
+<div class="modal-overlay hidden" id="modal-overlay" onclick="App.closeModal()">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-content" id="modal-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
 <div class="toast" id="toast"></div>
 
 <script>
-  const contacts = [
-    { name: 'Amani', battery: 18 },
-    { name: 'Kofi', battery: 6 },
-    { name: 'Njeri', battery: 44 },
-    { name: 'Daudi', battery: 31 },
-  ];
+/**
+ * BatteryShare — DB layer (localStorage-backed, simulates a shared backend)
+ * All data lives in localStorage under 'bshare_db'
+ */
+const DB = (() => {
 
-  let myBattery = 72;
-  let selected = 0;
-  let amount = 10;
-  const OVERHEAD = 0.02;
-  const history = [];
+  const KEY = 'bshare_db';
 
+  /* ── Seed data ── */
+  const SEED = {
+    users: {
+      amani:  { id: 'amani',  name: 'Amani Kamau',    password: 'demo', battery: 62, online: true,  avatarIdx: 0, totalGiven: 0,    totalReceived: 0 },
+      kofi:   { id: 'kofi',   name: 'Kofi Mensah',    password: 'demo', battery: 14, online: true,  avatarIdx: 1, totalGiven: 0,    totalReceived: 0 },
+      njeri:  { id: 'njeri',  name: 'Njeri Wanjiku',  password: 'demo', battery: 78, online: false, avatarIdx: 2, totalGiven: 0,    totalReceived: 0 },
+      daudi:  { id: 'daudi',  name: 'Daudi Ochieng',  password: 'demo', battery: 31, online: true,  avatarIdx: 3, totalGiven: 0,    totalReceived: 0 },
+      fatuma: { id: 'fatuma', name: 'Fatuma Hassan',  password: 'demo', battery: 55, online: false, avatarIdx: 4, totalGiven: 0,    totalReceived: 0 },
+      jabari: { id: 'jabari', name: 'Jabari Oduya',   password: 'demo', battery: 88, online: true,  avatarIdx: 5, totalGiven: 0,    totalReceived: 0 },
+    },
+    contacts: {
+      /* uid → [uid, uid] */
+      amani:  ['kofi', 'njeri'],
+      kofi:   ['amani', 'daudi'],
+      njeri:  ['amani'],
+      daudi:  ['kofi'],
+      fatuma: [],
+      jabari: [],
+    },
+    /* contact requests: { id, from, to, status:'pending'|'accepted'|'declined', ts } */
+    contactRequests: [],
+    /* charge requests: { id, from, to, amount, status:'pending'|'accepted'|'declined', ts } */
+    chargeRequests: [],
+    /* transfers: { id, from, to, amount, received, ts } */
+    transfers: [],
+  };
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(KEY);
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return null;
+  }
+
+  function save(db) {
+    localStorage.setItem(KEY, JSON.stringify(db));
+  }
+
+  function init() {
+    if (!load()) save(SEED);
+  }
+
+  function get() {
+    return load() || SEED;
+  }
+
+  function uid() {
+    return Math.random().toString(36).slice(2, 10);
+  }
+
+  /* ════ AUTH ════ */
+  function getUser(username) {
+    return get().users[username] || null;
+  }
+
+  function authenticate(username, password) {
+    const u = getUser(username);
+    if (!u) return { ok: false, error: 'User not found' };
+    if (u.password !== password) return { ok: false, error: 'Wrong password' };
+    return { ok: true, user: u };
+  }
+
+  function createUser(name, username, password) {
+    const db = get();
+    if (db.users[username]) return { ok: false, error: 'Username taken' };
+    if (!username.match(/^[a-z0-9_]{2,20}$/)) return { ok: false, error: 'Username: 2-20 lowercase letters, numbers, _' };
+    db.users[username] = {
+      id: username, name, password,
+      battery: Math.floor(Math.random() * 40) + 40,
+      online: true,
+      avatarIdx: Object.keys(db.users).length % 6,
+      totalGiven: 0, totalReceived: 0
+    };
+    db.contacts[username] = [];
+    save(db);
+    return { ok: true, user: db.users[username] };
+  }
+
+  function setOnline(username, online) {
+    const db = get();
+    if (db.users[username]) { db.users[username].online = online; save(db); }
+  }
+
+  /* ════ CONTACTS ════ */
+  function getContacts(username) {
+    const db = get();
+    const ids = db.contacts[username] || [];
+    return ids.map(id => db.users[id]).filter(Boolean);
+  }
+
+  function addContact(fromId, toId) {
+    const db = get();
+    if (!db.contacts[fromId].includes(toId)) db.contacts[fromId].push(toId);
+    if (!db.contacts[toId].includes(fromId))  db.contacts[toId].push(fromId);
+    save(db);
+  }
+
+  function searchUsers(query, excludeId) {
+    if (!query || query.length < 2) return [];
+    const db = get();
+    const q = query.toLowerCase();
+    return Object.values(db.users).filter(u =>
+      u.id !== excludeId &&
+      (u.id.includes(q) || u.name.toLowerCase().includes(q))
+    ).slice(0, 6);
+  }
+
+  /* ════ CONTACT REQUESTS ════ */
+  function sendContactRequest(fromId, toId) {
+    const db = get();
+    const exists = db.contactRequests.find(r =>
+      r.from === fromId && r.to === toId && r.status === 'pending'
+    );
+    if (exists) return { ok: false, error: 'Request already sent' };
+    if ((db.contacts[fromId] || []).includes(toId)) return { ok: false, error: 'Already a contact' };
+    db.contactRequests.push({ id: uid(), from: fromId, to: toId, status: 'pending', ts: Date.now() });
+    save(db);
+    return { ok: true };
+  }
+
+  function getContactRequests(userId) {
+    const db = get();
+    const incoming = db.contactRequests.filter(r => r.to === userId && r.status === 'pending')
+      .map(r => ({ ...r, fromUser: db.users[r.from] }));
+    const outgoing = db.contactRequests.filter(r => r.from === userId && r.status === 'pending')
+      .map(r => ({ ...r, toUser: db.users[r.to] }));
+    return { incoming, outgoing };
+  }
+
+  function respondContactRequest(reqId, accept) {
+    const db = get();
+    const req = db.contactRequests.find(r => r.id === reqId);
+    if (!req) return;
+    req.status = accept ? 'accepted' : 'declined';
+    if (accept) addContact(req.from, req.to);
+    else save(db);
+  }
+
+  /* ════ CHARGE REQUESTS ════ */
+  function sendChargeRequest(fromId, toId, amount) {
+    const db = get();
+    db.chargeRequests.push({ id: uid(), from: fromId, to: toId, amount, status: 'pending', ts: Date.now() });
+    save(db);
+    return { ok: true };
+  }
+
+  function getChargeRequests(userId) {
+    const db = get();
+    const incoming = db.chargeRequests.filter(r => r.to === userId && r.status === 'pending')
+      .map(r => ({ ...r, fromUser: db.users[r.from] }));
+    const outgoing = db.chargeRequests.filter(r => r.from === userId && r.status === 'pending')
+      .map(r => ({ ...r, toUser: db.users[r.to] }));
+    return { incoming, outgoing };
+  }
+
+  function respondChargeRequest(reqId, accept, currentUserId) {
+    const db = get();
+    const req = db.chargeRequests.find(r => r.id === reqId);
+    if (!req) return { ok: false };
+    req.status = accept ? 'accepted' : 'declined';
+    if (accept) {
+      const sender = db.users[req.from];
+      const receiver = db.users[req.to];
+      if (!sender || !receiver) { save(db); return { ok: false, error: 'User not found' }; }
+      if (sender.battery < req.amount + 5) { save(db); return { ok: false, error: 'Sender battery too low' }; }
+      const overhead = req.amount * 0.02;
+      const received = +(req.amount - overhead).toFixed(1);
+      sender.battery   = Math.max(0, +(sender.battery - req.amount).toFixed(1));
+      receiver.battery = Math.min(100, +(receiver.battery + received).toFixed(1));
+      sender.totalGiven    = +(sender.totalGiven + req.amount).toFixed(1);
+      receiver.totalReceived = +(receiver.totalReceived + received).toFixed(1);
+      db.transfers.push({ id: uid(), from: req.from, to: req.to, amount: req.amount, received, ts: Date.now() });
+    }
+    save(db);
+    return { ok: true };
+  }
+
+  /* ════ TRANSFERS (direct send) ════ */
+  function transfer(fromId, toId, amount) {
+    const db = get();
+    const sender   = db.users[fromId];
+    const receiver = db.users[toId];
+    if (!sender || !receiver)    return { ok: false, error: 'User not found' };
+    if (sender.battery < amount + 5) return { ok: false, error: 'Not enough battery (keep at least 5%)' };
+    const overhead = amount * 0.02;
+    const received = +(amount - overhead).toFixed(1);
+    sender.battery   = Math.max(0, +(sender.battery - amount).toFixed(1));
+    receiver.battery = Math.min(100, +(receiver.battery + received).toFixed(1));
+    sender.totalGiven      = +(sender.totalGiven + amount).toFixed(1);
+    receiver.totalReceived = +(receiver.totalReceived + received).toFixed(1);
+    db.transfers.push({ id: uid(), from: fromId, to: toId, amount, received, ts: Date.now() });
+    save(db);
+    return { ok: true, sender, receiver };
+  }
+
+  function getTransfers(userId) {
+    const db = get();
+    return db.transfers
+      .filter(t => t.from === userId || t.to === userId)
+      .sort((a, b) => b.ts - a.ts)
+      .map(t => ({ ...t, fromUser: db.users[t.from], toUser: db.users[t.to] }));
+  }
+
+  /* ════ MISC ════ */
+  function getAllOnline(excludeId) {
+    const db = get();
+    return Object.values(db.users).filter(u => u.online && u.id !== excludeId);
+  }
+
+  function pendingRequestCount(userId) {
+    const db = get();
+    const charges  = db.chargeRequests.filter(r => r.to === userId && r.status === 'pending').length;
+    const contacts = db.contactRequests.filter(r => r.to === userId && r.status === 'pending').length;
+    return { charges, contacts };
+  }
+
+  function refreshUser(userId) {
+    return get().users[userId] || null;
+  }
+
+  init();
+
+  return {
+    authenticate, createUser, getUser, setOnline, refreshUser,
+    getContacts, searchUsers, sendContactRequest, getContactRequests, respondContactRequest, addContact,
+    sendChargeRequest, getChargeRequests, respondChargeRequest,
+    transfer, getTransfers,
+    getAllOnline, pendingRequestCount,
+  };
+
+})();
+
+</script>
+<script>
+/**
+ * BatteryShare — App logic
+ */
+const App = (() => {
+
+  let currentUser = null;
+  let pollInterval = null;
+
+  /* ══════════════════════════════════
+     UTILS
+  ══════════════════════════════════ */
   function batteryColor(p) {
-    if (p <= 20) return '#ff4f4f';
+    if (p <= 20) return '#ff5252';
     if (p <= 40) return '#ffb347';
     return '#b6ff6a';
   }
 
-  function renderBattery(fillId, shellId, pct) {
-    const fill = document.getElementById(fillId);
-    const shell = document.getElementById(shellId);
+  function avatarClass(idx) { return `av-${(idx || 0) % 6}`; }
+
+  function initials(name) {
+    return name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+  }
+
+  function timeAgo(ts) {
+    const s = Math.floor((Date.now() - ts) / 1000);
+    if (s < 60)    return 'just now';
+    if (s < 3600)  return `${Math.floor(s/60)}m ago`;
+    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
+    return `${Math.floor(s/86400)}d ago`;
+  }
+
+  function toast(msg, duration = 2600) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(el._t);
+    el._t = setTimeout(() => el.classList.remove('show'), duration);
+  }
+
+  function renderMiniShell(shellEl, fillEl, pct) {
+    const fill = document.querySelector(fillEl);
+    const shell = document.querySelector(shellEl);
+    if (!fill || !shell) return;
     const h = Math.max(0, Math.min(100, pct));
-    fill.style.height = (h / 100 * 74) + 'px';
+    fill.style.height = (h / 100 * 28) + 'px';
     fill.style.background = batteryColor(pct);
-    if (shell) shell.style.borderColor = batteryColor(pct);
+    shell.style.borderColor = batteryColor(pct);
+  }
+
+  function setHeaderBattery(pct) {
+    const fill = document.getElementById('hb-fill');
+    const pctEl = document.getElementById('hb-pct');
+    const shell = document.getElementById('hb-shell');
+    if (!fill) return;
+    fill.style.height = (Math.min(100, pct) / 100 * 44) + 'px';
+    fill.style.background = batteryColor(pct);
+    shell.style.borderColor = batteryColor(pct);
+    pctEl.textContent = Math.round(pct) + '%';
+    pctEl.style.color = batteryColor(pct);
+  }
+
+  /* ══════════════════════════════════
+     AUTH
+  ══════════════════════════════════ */
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+
+  function showLogin() {
+    document.getElementById('form-login').classList.remove('hidden');
+    document.getElementById('form-register').classList.add('hidden');
+  }
+
+  function showRegister() {
+    document.getElementById('form-login').classList.add('hidden');
+    document.getElementById('form-register').classList.remove('hidden');
+  }
+
+  function login() {
+    const username = document.getElementById('login-username').value.trim().toLowerCase();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('login-error');
+    const res = DB.authenticate(username, password);
+    if (!res.ok) { errEl.textContent = res.error; return; }
+    errEl.textContent = '';
+    DB.setOnline(username, true);
+    currentUser = DB.refreshUser(username);
+    enterApp();
+  }
+
+  function demoLogin(username) {
+    DB.setOnline(username, true);
+    currentUser = DB.refreshUser(username);
+    enterApp();
+  }
+
+  function register() {
+    const name     = document.getElementById('reg-name').value.trim();
+    const username = document.getElementById('reg-username').value.trim().toLowerCase();
+    const password = document.getElementById('reg-password').value;
+    const errEl    = document.getElementById('reg-error');
+    if (!name)     { errEl.textContent = 'Enter your name'; return; }
+    if (!password) { errEl.textContent = 'Enter a password'; return; }
+    const res = DB.createUser(name, username, password);
+    if (!res.ok) { errEl.textContent = res.error; return; }
+    DB.setOnline(username, true);
+    currentUser = res.user;
+    enterApp();
+  }
+
+  function logout() {
+    if (currentUser) DB.setOnline(currentUser.id, false);
+    clearInterval(pollInterval);
+    currentUser = null;
+    showScreen('screen-auth');
+    showLogin();
+  }
+
+  /* ══════════════════════════════════
+     ENTER APP
+  ══════════════════════════════════ */
+  function enterApp() {
+    showScreen('screen-app');
+    setTab('home');
+    startPolling();
+    renderAll();
   }
 
   function renderAll() {
-    const c = contacts[selected];
-    document.getElementById('my-pct').textContent = Math.round(myBattery) + '%';
-    document.getElementById('their-pct').textContent = Math.round(c.battery) + '%';
-    document.getElementById('recipient-name').textContent = c.name;
-
-    renderBattery('my-fill', null, myBattery);
-    renderBattery('their-fill', null, c.battery);
-
-    const shells = document.querySelectorAll('.battery-shell');
-    if (shells[0]) shells[0].style.borderColor = batteryColor(myBattery);
-    if (shells[1]) shells[1].style.borderColor = batteryColor(c.battery);
-
-    const loss = +(amount * OVERHEAD).toFixed(1);
-    const recv = +(amount - loss).toFixed(1);
-    document.getElementById('loss-text').textContent = loss + '% lost in transfer';
-    document.getElementById('receive-text').textContent = recv + '%';
-    document.getElementById('amount-out').textContent = amount + '%';
-    document.getElementById('transfer-btn').textContent = `Send ${amount}% to ${c.name}`;
-    document.getElementById('transfer-btn').disabled = myBattery < amount + 5;
+    currentUser = DB.refreshUser(currentUser.id);
+    renderHome();
+    renderContacts();
+    renderRequests();
+    renderHistory();
+    updateBadges();
   }
 
-  function buildContacts() {
-    const wrap = document.getElementById('contacts');
-    wrap.innerHTML = '';
-    contacts.forEach((c, i) => {
-      const btn = document.createElement('button');
-      btn.className = 'chip' + (i === selected ? ' active' : '');
-      btn.textContent = c.name + ' ' + Math.round(c.battery) + '%';
-      btn.onclick = () => { selected = i; buildContacts(); renderAll(); };
-      wrap.appendChild(btn);
+  /* ══════════════════════════════════
+     POLLING (simulates real-time)
+  ══════════════════════════════════ */
+  function startPolling() {
+    clearInterval(pollInterval);
+    pollInterval = setInterval(() => {
+      currentUser = DB.refreshUser(currentUser.id);
+      const activeTab = document.querySelector('.tab.active')?.id?.replace('tab-', '');
+      setHeaderBattery(currentUser.battery);
+      updateStats();
+      updateBadges();
+      if (activeTab === 'home')     renderOnlineList();
+      if (activeTab === 'requests') renderRequests();
+      if (activeTab === 'contacts') renderContacts();
+      if (activeTab === 'history')  renderHistory();
+    }, 2000);
+  }
+
+  function updateBadges() {
+    const counts = DB.pendingRequestCount(currentUser.id);
+    const rb = document.getElementById('requests-badge');
+    const cb = document.getElementById('contacts-badge');
+    const total = counts.charges + counts.contacts;
+    rb.classList.toggle('show', counts.charges > 0);
+    cb.classList.toggle('show', counts.contacts > 0);
+  }
+
+  /* ══════════════════════════════════
+     TABS
+  ══════════════════════════════════ */
+  function setTab(name) {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tab-${name}`).classList.add('active');
+    document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
+    if (name === 'home')     renderHome();
+    if (name === 'contacts') renderContacts();
+    if (name === 'requests') renderRequests();
+    if (name === 'history')  renderHistory();
+  }
+
+  /* ══════════════════════════════════
+     HOME
+  ══════════════════════════════════ */
+  function renderHome() {
+    currentUser = DB.refreshUser(currentUser.id);
+    const hour = new Date().getHours();
+    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+    document.getElementById('home-greeting').textContent = greeting + ', ' + currentUser.name.split(' ')[0];
+    document.getElementById('home-username').textContent = '@' + currentUser.id;
+    setHeaderBattery(currentUser.battery);
+    updateStats();
+    updateSendPanel();
+    renderOnlineList();
+  }
+
+  function updateStats() {
+    document.getElementById('stat-given').textContent    = currentUser.totalGiven + '%';
+    document.getElementById('stat-received').textContent = currentUser.totalReceived + '%';
+    document.getElementById('stat-contacts').textContent = DB.getContacts(currentUser.id).length;
+  }
+
+  function updateSendPanel() {
+    const contacts = DB.getContacts(currentUser.id);
+    const sel = document.getElementById('send-to');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— pick a contact —</option>';
+    contacts.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `${c.name} (${Math.round(c.battery)}%)`;
+      if (c.id === current) opt.selected = true;
+      sel.appendChild(opt);
     });
+    updateSendNote();
   }
 
-  document.getElementById('amount-slider').addEventListener('input', function () {
-    amount = parseInt(this.value);
+  function updateSendNote() {
+    const amount = parseInt(document.getElementById('send-slider').value);
+    const overhead = +(amount * 0.02).toFixed(1);
+    const recv    = +(amount - overhead).toFixed(1);
+    document.getElementById('send-note').textContent =
+      `⚡ ${overhead}% overhead · they receive ${recv}%`;
+    document.getElementById('send-amount-val').textContent = amount + '%';
+    document.getElementById('send-btn').textContent = `Send ${amount}% →`;
+    const toId = document.getElementById('send-to').value;
+    document.getElementById('send-btn').disabled = !toId || currentUser.battery < amount + 5;
+  }
+
+  function sendCharge() {
+    const toId  = document.getElementById('send-to').value;
+    const amount = parseInt(document.getElementById('send-slider').value);
+    if (!toId) { toast('Pick a contact first'); return; }
+    const res = DB.transfer(currentUser.id, toId, amount);
+    if (!res.ok) { toast('⚠ ' + res.error); return; }
+    currentUser = DB.refreshUser(currentUser.id);
+    toast(`✓ Sent ${amount}% to ${res.receiver.name}!`);
     renderAll();
+  }
+
+  function renderOnlineList() {
+    const contacts = DB.getContacts(currentUser.id);
+    const el = document.getElementById('online-list');
+    if (!contacts.length) { el.innerHTML = '<p class="empty-msg">Add contacts to see who\'s online</p>'; return; }
+    el.innerHTML = contacts.map(c => `
+      <div class="online-card">
+        <div class="avatar ${avatarClass(c.avatarIdx)}">${initials(c.name)}</div>
+        <div class="online-info">
+          <div class="online-name">${c.name}</div>
+          <div class="online-handle">@${c.id}</div>
+        </div>
+        <div class="online-battery">
+          ${c.online ? `<div class="status-dot" title="Online"></div>` : ''}
+          <div class="mini-shell" style="border-color:${batteryColor(c.battery)}">
+            <div class="mini-fill" style="height:${(c.battery/100*28).toFixed(0)}px;background:${batteryColor(c.battery)}"></div>
+          </div>
+          <span class="mini-pct">${Math.round(c.battery)}%</span>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  /* ══════════════════════════════════
+     CONTACTS
+  ══════════════════════════════════ */
+  function renderContacts() {
+    const contacts = DB.getContacts(currentUser.id);
+    const el = document.getElementById('contacts-list');
+    if (!contacts.length) {
+      el.innerHTML = '<p class="empty-msg">No contacts yet — search above to add someone</p>';
+      return;
+    }
+    el.innerHTML = contacts.map(c => `
+      <div class="contact-card">
+        <div class="avatar ${avatarClass(c.avatarIdx)}">${initials(c.name)}</div>
+        <div class="contact-info">
+          <div class="contact-name">${c.name}</div>
+          <div class="contact-handle">@${c.id} · ${Math.round(c.battery)}%</div>
+        </div>
+        <span class="contact-status ${c.online ? 'online' : ''}">${c.online ? '● online' : '○ offline'}</span>
+        <div class="contact-actions">
+          <button class="btn-sm" onclick="App.openSendToContact('${c.id}')">Send ⚡</button>
+          <button class="btn-sm" onclick="App.openRequestFrom('${c.id}')">Request</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  function openAddContact() {
+    document.getElementById('contact-search').value = '';
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('contact-search').focus();
+  }
+
+  function searchUsers(query) {
+    const resultsEl = document.getElementById('search-results');
+    if (!query || query.length < 2) { resultsEl.innerHTML = ''; return; }
+    const results = DB.searchUsers(query, currentUser.id);
+    if (!results.length) { resultsEl.innerHTML = '<div class="search-result-item"><span style="color:var(--text2);font-family:var(--font-m);font-size:12px;">No users found</span></div>'; return; }
+    resultsEl.innerHTML = results.map(u => {
+      const isContact = DB.getContacts(currentUser.id).some(c => c.id === u.id);
+      return `
+        <div class="search-result-item">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="avatar ${avatarClass(u.avatarIdx)}" style="width:28px;height:28px;font-size:11px;">${initials(u.name)}</div>
+            <div>
+              <div style="font-size:13px;font-weight:600;">${u.name}</div>
+              <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);">@${u.id}</div>
+            </div>
+          </div>
+          ${isContact
+            ? `<span style="font-family:var(--font-m);font-size:11px;color:var(--text2);">Contact</span>`
+            : `<button class="btn-sm" onclick="App.addContact('${u.id}')">+ Add</button>`
+          }
+        </div>
+      `;
+    }).join('');
+  }
+
+  function addContact(toId) {
+    const res = DB.sendContactRequest(currentUser.id, toId);
+    if (!res.ok) { toast('⚠ ' + res.error); return; }
+    toast('Contact request sent!');
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('contact-search').value = '';
+    renderContacts();
+    updateBadges();
+  }
+
+  /* ══════════════════════════════════
+     SEND / REQUEST MODALS
+  ══════════════════════════════════ */
+  function openSendToContact(contactId) {
+    const sel = document.getElementById('send-to');
+    sel.value = contactId;
+    setTab('home');
+    updateSendNote();
+    document.getElementById('send-slider').focus();
+  }
+
+  function openRequestFrom(contactId) {
+    const contact = DB.getUser(contactId);
+    if (!contact) return;
+    openModal(`
+      <h3>Request charge</h3>
+      <p style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1.25rem;">
+        Ask ${contact.name} to send you battery
+      </p>
+      <div class="field">
+        <label class="field-label">Amount to request <span id="req-amount-disp" style="color:var(--accent)">10%</span></label>
+        <input type="range" min="1" max="40" value="10" step="1" id="req-slider"
+          oninput="document.getElementById('req-amount-disp').textContent=this.value+'%'"/>
+      </div>
+      <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-bottom:1rem;">
+        They'll get a notification to accept or decline
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm" onclick="App.closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="App.submitChargeRequest('${contactId}')">Send request →</button>
+      </div>
+    `);
+  }
+
+  function submitChargeRequest(toId) {
+    const amount = parseInt(document.getElementById('req-slider').value);
+    DB.sendChargeRequest(currentUser.id, toId, amount);
+    closeModal();
+    toast(`Request sent to ${DB.getUser(toId).name}!`);
+    updateBadges();
+  }
+
+  /* ══════════════════════════════════
+     REQUESTS
+  ══════════════════════════════════ */
+  function renderRequests() {
+    const { incoming: contactIn, outgoing: contactOut } = DB.getContactRequests(currentUser.id);
+    const { incoming: chargeIn,  outgoing: chargeOut  } = DB.getChargeRequests(currentUser.id);
+    const allIncoming = [
+      ...contactIn.map(r => ({ ...r, kind: 'contact' })),
+      ...chargeIn.map(r => ({ ...r, kind: 'charge' })),
+    ];
+    const allOutgoing = [
+      ...contactOut.map(r => ({ ...r, kind: 'contact' })),
+      ...chargeOut.map(r => ({ ...r, kind: 'charge' })),
+    ];
+
+    renderIncoming(allIncoming);
+    renderOutgoing(allOutgoing);
+  }
+
+  function renderIncoming(items) {
+    const el = document.getElementById('incoming-requests');
+    if (!items.length) { el.innerHTML = '<p class="empty-msg">No incoming requests</p>'; return; }
+    el.innerHTML = items.map(r => {
+      const user = r.fromUser;
+      if (r.kind === 'contact') return `
+        <div class="request-card">
+          <div class="request-top">
+            <div class="avatar ${avatarClass(user.avatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(user.name)}</div>
+            <div class="request-info">
+              <div class="request-name">${user.name}</div>
+              <div class="request-meta">wants to add you as a contact · ${timeAgo(r.ts)}</div>
+            </div>
+          </div>
+          <div class="request-actions">
+            <button class="btn-success" onclick="App.acceptContact('${r.id}')">✓ Accept</button>
+            <button class="btn-danger"  onclick="App.declineContact('${r.id}')">✕ Decline</button>
+          </div>
+        </div>
+      `;
+      return `
+        <div class="request-card">
+          <div class="request-top">
+            <div class="avatar ${avatarClass(user.avatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(user.name)}</div>
+            <div class="request-info">
+              <div class="request-name">${user.name}</div>
+              <div class="request-meta">requesting charge · ${timeAgo(r.ts)}</div>
+            </div>
+            <div class="request-amount">${r.amount}%</div>
+          </div>
+          <div class="request-actions">
+            <button class="btn-success" onclick="App.acceptCharge('${r.id}')">⚡ Send it</button>
+            <button class="btn-danger"  onclick="App.declineCharge('${r.id}')">✕ Decline</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function renderOutgoing(items) {
+    const el = document.getElementById('outgoing-requests');
+    if (!items.length) { el.innerHTML = '<p class="empty-msg">No outgoing requests</p>'; return; }
+    el.innerHTML = items.map(r => {
+      const user = r.toUser;
+      const label = r.kind === 'contact' ? 'Contact request' : `Charge request (${r.amount}%)`;
+      return `
+        <div class="request-card">
+          <div class="request-top">
+            <div class="avatar ${avatarClass(user.avatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(user.name)}</div>
+            <div class="request-info">
+              <div class="request-name">${user.name}</div>
+              <div class="request-meta">${label} · ${timeAgo(r.ts)} · pending</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  function acceptContact(reqId) {
+    DB.respondContactRequest(reqId, true);
+    toast('✓ Contact added!');
+    renderAll();
+  }
+
+  function declineContact(reqId) {
+    DB.respondContactRequest(reqId, false);
+    renderRequests();
+    updateBadges();
+  }
+
+  function acceptCharge(reqId) {
+    const res = DB.respondChargeRequest(reqId, true, currentUser.id);
+    if (!res.ok) { toast('⚠ ' + (res.error || 'Failed')); return; }
+    currentUser = DB.refreshUser(currentUser.id);
+    toast('⚡ Charge sent!');
+    renderAll();
+  }
+
+  function declineCharge(reqId) {
+    DB.respondChargeRequest(reqId, false, currentUser.id);
+    renderRequests();
+    updateBadges();
+  }
+
+  /* ══════════════════════════════════
+     HISTORY
+  ══════════════════════════════════ */
+  function renderHistory() {
+    const transfers = DB.getTransfers(currentUser.id);
+    const el = document.getElementById('history-list');
+    if (!transfers.length) { el.innerHTML = '<p class="empty-msg">No transfers yet</p>'; return; }
+    el.innerHTML = transfers.map(t => {
+      const isSent = t.from === currentUser.id;
+      const other  = isSent ? t.toUser : t.fromUser;
+      return `
+        <div class="history-item">
+          <div class="history-left">
+            <div class="avatar ${avatarClass(other?.avatarIdx)} history-dir" style="width:32px;height:32px;font-size:11px;flex-shrink:0;">
+              ${initials(other?.name || '?')}
+            </div>
+            <div>
+              <div class="history-who">${isSent ? '→ ' : '← '}${other?.name || 'Unknown'}</div>
+              <div class="history-time">${timeAgo(t.ts)}</div>
+            </div>
+          </div>
+          <div class="history-amt ${isSent ? 'sent' : 'received'}">
+            ${isSent ? '−' : '+'}${isSent ? t.amount : t.received}%
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  /* ══════════════════════════════════
+     MODAL
+  ══════════════════════════════════ */
+  function openModal(html) {
+    document.getElementById('modal-content').innerHTML = html;
+    document.getElementById('modal-overlay').classList.remove('hidden');
+  }
+
+  function closeModal() {
+    document.getElementById('modal-overlay').classList.add('hidden');
+  }
+
+  /* ══════════════════════════════════
+     EVENT WIRING
+  ══════════════════════════════════ */
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && document.getElementById('form-login').classList.contains('hidden') === false) login();
+    if (e.key === 'Escape') closeModal();
   });
 
-  function showToast(msg) {
-    const t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(() => t.classList.remove('show'), 2600);
-  }
+  document.getElementById('send-slider').addEventListener('input', updateSendNote);
+  document.getElementById('send-to').addEventListener('change', updateSendNote);
 
-  function doTransfer() {
-    const c = contacts[selected];
-    if (myBattery < amount + 5) { showToast('⚠ Not enough battery!'); return; }
-    const loss = amount * OVERHEAD;
-    const recv = +(amount - loss).toFixed(1);
-    myBattery = +(myBattery - amount).toFixed(1);
-    c.battery = Math.min(100, +(c.battery + recv).toFixed(1));
-    history.unshift({ to: c.name, sent: amount, recv });
-    renderAll();
-    buildContacts();
-    showToast(`✓ Sent ${amount}% to ${c.name}!`);
-    renderLog();
-  }
+  /* ══════════════════════════════════
+     PUBLIC API
+  ══════════════════════════════════ */
+  return {
+    login, demoLogin, register, logout,
+    showLogin, showRegister,
+    setTab,
+    sendCharge,
+    openAddContact, searchUsers, addContact,
+    openSendToContact, openRequestFrom, submitChargeRequest,
+    acceptContact, declineContact, acceptCharge, declineCharge,
+    openModal, closeModal,
+    renderAll,
+  };
 
-  function renderLog() {
-    if (!history.length) return;
-    const log = document.getElementById('log');
-    log.classList.add('visible');
-    document.getElementById('log-entries').innerHTML = history.slice(0, 6).map(h =>
-      `<div class="log-entry">
-        <span class="to">→ <span>${h.to}</span></span>
-        <span class="amt">−${h.sent}% (${h.recv}% received)</span>
-      </div>`
-    ).join('');
-  }
+})();
 
-  buildContacts();
-  renderAll();
 </script>
 </body>
 </html>
