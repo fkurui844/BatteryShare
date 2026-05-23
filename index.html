@@ -1190,7 +1190,7 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
           </div>
           <div>
             <span class="hb-pct" id="hb-pct">—%</span>
-            <div id="hb-source" style="font-family:var(--font-m);font-size:10px;color:var(--text3);text-align:right;margin-top:2px;"></div>
+            <div id="hb-source" style="font-family:var(--font-m);font-size:10px;color:var(--text3);text-align:right;margin-top:2px;">shareable</div>
           </div>
         </div>
       </div>
@@ -1405,24 +1405,17 @@ const App = (() => {
   /* ════════════════════════════════
      BATTERY DISPLAY
   ════════════════════════════════ */
-  function setHeaderBattery(pct, charging) {
+  function setHeaderBattery(pct) {
     const fill  = document.getElementById('hb-fill');
     const pctEl = document.getElementById('hb-pct');
     const shell = document.getElementById('hb-shell');
-    const srcEl = document.getElementById('hb-source');
     if (!fill) return;
     const p = Math.round(pct);
-    fill.style.height     = (Math.min(100,p)/100*44) + 'px';
-    fill.style.background = batteryColor(p);
+    fill.style.height       = (Math.min(100, p) / 100 * 44) + 'px';
+    fill.style.background   = batteryColor(p);
     shell.style.borderColor = batteryColor(p);
-    pctEl.textContent   = p + '%';
-    pctEl.style.color   = batteryColor(p);
-    if (srcEl) {
-      srcEl.textContent = deviceBattery !== null
-        ? (charging ? '⚡ charging' : 'your device') : 'simulated';
-      srcEl.style.color = (deviceBattery !== null && charging)
-        ? 'var(--accent)' : 'var(--text3)';
-    }
+    pctEl.textContent       = p + '%';
+    pctEl.style.color       = batteryColor(p);
   }
 
   function flashShell() {
@@ -1718,13 +1711,24 @@ const App = (() => {
       function update() {
         deviceBattery  = Math.round(bat.level * 100);
         deviceCharging = bat.charging;
-        setHeaderBattery(deviceBattery, deviceCharging);
-        rtdb.ref('users/' + currentUser.uid + '/battery').set(deviceBattery).catch(() => {});
+        // Only update the device battery display — do NOT write to Firebase.
+        // The shareable battery in Firebase is separate and changes only via transfers.
+        updateDeviceBatteryDisplay();
       }
       bat.addEventListener('levelchange',    update);
       bat.addEventListener('chargingchange', update);
       update();
     }).catch(() => {});
+  }
+
+  function updateDeviceBatteryDisplay() {
+    const srcEl = document.getElementById('hb-source');
+    if (!srcEl) return;
+    if (deviceBattery !== null) {
+      srcEl.innerHTML =
+        `<span style="color:var(--text3);">device: ${deviceBattery}%</span>` +
+        (deviceCharging ? ' <span style="color:var(--accent);">⚡</span>' : '');
+    }
   }
 
   /* ════════════════════════════════
@@ -1818,8 +1822,9 @@ const App = (() => {
       (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') +
       ', ' + currentUser.name.split(' ')[0];
     document.getElementById('home-username').textContent = '@' + currentUser.username;
-    const pct = deviceBattery !== null ? deviceBattery : (currentUser.battery || 0);
-    setHeaderBattery(pct, deviceCharging);
+    // Firebase battery is the authoritative shareable value
+    setHeaderBattery(currentUser.battery || 0);
+    updateDeviceBatteryDisplay();
     updateStats();
     renderOnlineList();
     updateSendPanel();
