@@ -869,10 +869,15 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
           <p class="tab-sub" id="home-username">@username</p>
         </div>
         <div class="header-battery">
-          <div class="hb-shell" id="hb-shell">
-            <div class="hb-fill" id="hb-fill"></div>
+          <div>
+            <div class="hb-shell" id="hb-shell">
+              <div class="hb-fill" id="hb-fill"></div>
+            </div>
           </div>
-          <span class="hb-pct" id="hb-pct">—%</span>
+          <div>
+            <span class="hb-pct" id="hb-pct">—%</span>
+            <div id="hb-source" style="font-family:var(--font-m);font-size:10px;color:var(--text3);text-align:right;margin-top:2px;"></div>
+          </div>
         </div>
       </div>
 
@@ -893,6 +898,13 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 
       <div class="section-title">Send charge</div>
       <div class="send-panel">
+        <div style="display:flex;align-items:center;gap:8px;background:var(--accent-bg);border:0.5px solid rgba(182,255,106,0.2);border-radius:var(--rad-sm);padding:8px 12px;margin-bottom:1rem;">
+          <span style="font-size:14px;">🔒</span>
+          <span style="font-family:var(--font-m);font-size:11px;color:var(--text2);line-height:1.5;">
+            Transfers only work between registered BatteryShare accounts.
+            <a onclick="App.setTab('contacts')" style="color:var(--accent);cursor:pointer;text-decoration:underline;">Invite someone</a> who doesn't have one yet.
+          </span>
+        </div>
         <div class="send-to-row">
           <label class="field-label">To</label>
           <select id="send-to" class="select-field">
@@ -917,7 +929,10 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
     <div class="tab" id="tab-contacts">
       <div class="tab-header">
         <h2>Contacts</h2>
-        <button class="btn-sm" onclick="App.openAddContact()">+ Add</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn-sm" onclick="App.openInviteModal('')">📨 Invite</button>
+          <button class="btn-sm" onclick="App.openAddContact()">+ Add</button>
+        </div>
       </div>
 
       <div class="search-wrap">
@@ -1221,6 +1236,8 @@ const App = (() => {
 
   let currentUser = null;
   let pollInterval = null;
+  let deviceBattery = null;   // real device battery %
+  let deviceCharging = false;
 
   /* ══════════════════════════════════
      UTILS
@@ -1263,16 +1280,27 @@ const App = (() => {
     shell.style.borderColor = batteryColor(pct);
   }
 
-  function setHeaderBattery(pct) {
-    const fill = document.getElementById('hb-fill');
+  function setHeaderBattery(pct, charging) {
+    const fill  = document.getElementById('hb-fill');
     const pctEl = document.getElementById('hb-pct');
     const shell = document.getElementById('hb-shell');
+    const srcEl = document.getElementById('hb-source');
     if (!fill) return;
-    fill.style.height = (Math.min(100, pct) / 100 * 44) + 'px';
-    fill.style.background = batteryColor(pct);
-    shell.style.borderColor = batteryColor(pct);
-    pctEl.textContent = Math.round(pct) + '%';
-    pctEl.style.color = batteryColor(pct);
+    const p = Math.round(pct);
+    fill.style.height = (Math.min(100, p) / 100 * 44) + 'px';
+    fill.style.background = batteryColor(p);
+    shell.style.borderColor = batteryColor(p);
+    pctEl.textContent = p + '%';
+    pctEl.style.color = batteryColor(p);
+    if (srcEl) {
+      if (deviceBattery !== null) {
+        srcEl.textContent = charging ? '⚡ charging' : 'your device';
+        srcEl.style.color = charging ? 'var(--accent)' : 'var(--text2)';
+      } else {
+        srcEl.textContent = 'simulated';
+        srcEl.style.color = 'var(--text3)';
+      }
+    }
   }
 
   /* ══════════════════════════════════
@@ -1336,11 +1364,40 @@ const App = (() => {
   /* ══════════════════════════════════
      ENTER APP
   ══════════════════════════════════ */
+  function initDeviceBattery() {
+    if (!navigator.getBattery) { deviceBattery = null; return; }
+    navigator.getBattery().then(bat => {
+      function update() {
+        deviceBattery  = Math.round(bat.level * 100);
+        deviceCharging = bat.charging;
+        // write real device % into the user's stored record
+        const raw = localStorage.getItem('bshare_db');
+        if (raw) {
+          try {
+            const db = JSON.parse(raw);
+            if (db.users && db.users[currentUser.id]) {
+              db.users[currentUser.id].battery = deviceBattery;
+              localStorage.setItem('bshare_db', JSON.stringify(db));
+            }
+          } catch(_) {}
+        }
+        currentUser = DB.refreshUser(currentUser.id);
+        setHeaderBattery(deviceBattery, deviceCharging);
+        updateStats();
+        updateSendNote();
+      }
+      bat.addEventListener('levelchange',    update);
+      bat.addEventListener('chargingchange', update);
+      update();
+    }).catch(() => { deviceBattery = null; });
+  }
+
   function enterApp() {
     showScreen('screen-app');
     setTab('home');
     startPolling();
     renderAll();
+    initDeviceBattery();
   }
 
   function renderAll() {
@@ -1360,7 +1417,8 @@ const App = (() => {
     pollInterval = setInterval(() => {
       currentUser = DB.refreshUser(currentUser.id);
       const activeTab = document.querySelector('.tab.active')?.id?.replace('tab-', '');
-      setHeaderBattery(currentUser.battery);
+      const displayPct = deviceBattery !== null ? deviceBattery : currentUser.battery;
+      setHeaderBattery(displayPct, deviceCharging);
       updateStats();
       updateBadges();
       if (activeTab === 'home')     renderOnlineList();
@@ -1402,7 +1460,8 @@ const App = (() => {
     const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
     document.getElementById('home-greeting').textContent = greeting + ', ' + currentUser.name.split(' ')[0];
     document.getElementById('home-username').textContent = '@' + currentUser.id;
-    setHeaderBattery(currentUser.battery);
+    const displayPct = deviceBattery !== null ? deviceBattery : currentUser.battery;
+    setHeaderBattery(displayPct, deviceCharging);
     updateStats();
     updateSendPanel();
     renderOnlineList();
@@ -1510,7 +1569,23 @@ const App = (() => {
     const resultsEl = document.getElementById('search-results');
     if (!query || query.length < 2) { resultsEl.innerHTML = ''; return; }
     const results = DB.searchUsers(query, currentUser.id);
-    if (!results.length) { resultsEl.innerHTML = '<div class="search-result-item"><span style="color:var(--text2);font-family:var(--font-m);font-size:12px;">No users found</span></div>'; return; }
+    if (!results.length) {
+      resultsEl.innerHTML = `
+        <div class="search-result-item" style="flex-direction:column;align-items:flex-start;gap:10px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:18px;">🔍</span>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--text);">No account found for "<em>${query}</em>"</div>
+              <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-top:2px;">They need a BatteryShare account to receive charge</div>
+            </div>
+          </div>
+          <button class="btn-primary" style="width:100%;margin-top:0;" onclick="App.openInviteModal('${query.replace(/'/g,"\\'")}')">
+            📨 Invite them to join BatteryShare →
+          </button>
+        </div>
+      `;
+      return;
+    }
     resultsEl.innerHTML = results.map(u => {
       const isContact = DB.getContacts(currentUser.id).some(c => c.id === u.id);
       return `
@@ -1519,16 +1594,64 @@ const App = (() => {
             <div class="avatar ${avatarClass(u.avatarIdx)}" style="width:28px;height:28px;font-size:11px;">${initials(u.name)}</div>
             <div>
               <div style="font-size:13px;font-weight:600;">${u.name}</div>
-              <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);">@${u.id}</div>
+              <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);">@${u.id} · ${Math.round(u.battery)}%</div>
             </div>
           </div>
           ${isContact
-            ? `<span style="font-family:var(--font-m);font-size:11px;color:var(--text2);">Contact</span>`
+            ? `<span style="font-family:var(--font-m);font-size:11px;color:var(--accent);">✓ Contact</span>`
             : `<button class="btn-sm" onclick="App.addContact('${u.id}')">+ Add</button>`
           }
         </div>
       `;
     }).join('');
+  }
+
+  function openInviteModal(nameHint) {
+    const appUrl = window.location.href.split('?')[0];
+    const inviteMsg = `Hey${nameHint ? ' ' + nameHint : ''}! I'm using BatteryShare to transfer phone battery % between friends. Join me so I can send you some charge 🔋⚡\n\nSign up here: ${appUrl}`;
+    openModal(`
+      <h3>📨 Invite to BatteryShare</h3>
+      <p style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1.25rem;line-height:1.6;">
+        This person doesn't have an account yet. Share the invite below — once they sign up, you'll be able to send them charge.
+      </p>
+      <div style="background:var(--surf2);border:0.5px solid var(--border2);border-radius:var(--rad-sm);padding:12px;margin-bottom:1rem;">
+        <div style="font-family:var(--font-m);font-size:12px;color:var(--text);line-height:1.7;white-space:pre-wrap;" id="invite-text">${inviteMsg}</div>
+      </div>
+      <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-bottom:1rem;">
+        Share via WhatsApp, SMS, or copy the message above
+      </div>
+      <div class="modal-actions" style="flex-wrap:wrap;gap:8px;">
+        <button class="btn-sm" onclick="App.copyInvite()">📋 Copy message</button>
+        <button class="btn-sm" onclick="App.shareViaWhatsApp('${encodeURIComponent(inviteMsg)}')">WhatsApp</button>
+        <button class="btn-sm" onclick="App.shareViaSMS('${encodeURIComponent(inviteMsg)}')">SMS</button>
+        <button class="btn-primary" style="flex:1;min-width:120px;" onclick="App.closeModal()">Done</button>
+      </div>
+      <div id="invite-copied" style="font-family:var(--font-m);font-size:11px;color:var(--accent);margin-top:8px;min-height:16px;"></div>
+    `);
+  }
+
+  function copyInvite() {
+    const text = document.getElementById('invite-text')?.textContent || '';
+    navigator.clipboard.writeText(text).then(() => {
+      const el = document.getElementById('invite-copied');
+      if (el) { el.textContent = '✓ Copied to clipboard!'; setTimeout(() => { if(el) el.textContent = ''; }, 2500); }
+    }).catch(() => {
+      // fallback for browsers without clipboard API
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select(); document.execCommand('copy');
+      document.body.removeChild(ta);
+      const el = document.getElementById('invite-copied');
+      if (el) { el.textContent = '✓ Copied!'; setTimeout(() => { if(el) el.textContent = ''; }, 2500); }
+    });
+  }
+
+  function shareViaWhatsApp(encodedMsg) {
+    window.open('https://wa.me/?text=' + encodedMsg, '_blank');
+  }
+
+  function shareViaSMS(encodedMsg) {
+    window.open('sms:?body=' + encodedMsg, '_blank');
   }
 
   function addContact(toId) {
@@ -1751,6 +1874,7 @@ const App = (() => {
     openSendToContact, openRequestFrom, submitChargeRequest,
     acceptContact, declineContact, acceptCharge, declineCharge,
     openModal, closeModal,
+    openInviteModal, copyInvite, shareViaWhatsApp, shareViaSMS,
     renderAll,
   };
 
