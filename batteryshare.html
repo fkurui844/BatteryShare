@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>BatteryShare — Transfer Your Charge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0a0a0a;
+      --surface: #111111;
+      --surface2: #1a1a1a;
+      --border: rgba(255,255,255,0.08);
+      --border-bright: rgba(255,255,255,0.18);
+      --text: #f0ede8;
+      --muted: #6b6b6b;
+      --accent: #b6ff6a;
+      --accent-dim: rgba(182,255,106,0.12);
+      --danger: #ff4f4f;
+      --warn: #ffb347;
+      --radius: 16px;
+      --font-display: 'Syne', sans-serif;
+      --font-mono: 'DM Mono', monospace;
+    }
+
+    html { font-size: 16px; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-display);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -30%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(182,255,106,0.06) 0%, transparent 70%);
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    .wrapper {
+      width: 100%;
+      max-width: 480px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Header ── */
+    header {
+      text-align: center;
+      margin-bottom: 2.5rem;
+      padding-top: 1rem;
+    }
+
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 0.75rem;
+    }
+
+    .logo-icon {
+      width: 36px;
+      height: 36px;
+      border: 1.5px solid var(--accent);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-size: 22px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text);
+    }
+
+    .logo-text span { color: var(--accent); }
+
+    header p {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+    }
+
+    /* ── Phones row ── */
+    .phones {
+      display: grid;
+      grid-template-columns: 1fr 48px 1fr;
+      gap: 10px;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .phone-card {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem 1rem;
+      text-align: center;
+      transition: border-color 0.3s;
+    }
+
+    .phone-card.sender { border-color: var(--border-bright); }
+
+    .label {
+      font-family: var(--font-mono);
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .phone-name {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 14px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .battery-wrap { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+
+    .battery-shell {
+      position: relative;
+      width: 42px;
+      height: 78px;
+      border: 1.5px solid var(--border-bright);
+      border-radius: 7px;
+    }
+
+    .battery-shell::before {
+      content: '';
+      position: absolute;
+      top: -8px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 14px;
+      height: 7px;
+      background: var(--border-bright);
+      border-radius: 3px 3px 0 0;
+    }
+
+    .battery-fill {
+      position: absolute;
+      bottom: 2px;
+      left: 2px;
+      right: 2px;
+      border-radius: 4px;
+      transition: height 0.7s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+    }
+
+    .battery-pct {
+      font-family: var(--font-mono);
+      font-size: 20px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .arrow-col {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .arrow-col svg {
+      color: var(--accent);
+      animation: pulse-arrow 1.8s ease-in-out infinite;
+    }
+
+    @keyframes pulse-arrow {
+      0%, 100% { opacity: 0.4; transform: translateX(0); }
+      50% { opacity: 1; transform: translateX(4px); }
+    }
+
+    /* ── Contacts ── */
+    .section-label {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 10px;
+    }
+
+    .contacts {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 1.5rem;
+    }
+
+    .chip {
+      padding: 7px 14px;
+      border: 0.5px solid var(--border);
+      border-radius: 99px;
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+      background: var(--surface);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .chip:hover { border-color: var(--border-bright); color: var(--text); }
+    .chip.active {
+      border-color: var(--accent);
+      color: var(--accent);
+      background: var(--accent-dim);
+    }
+
+    /* ── Controls ── */
+    .controls {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .slider-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .slider-row .key {
+      font-family: var(--font-mono);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .slider-row .val {
+      font-family: var(--font-mono);
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--accent);
+    }
+
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 4px;
+      background: var(--surface2);
+      border-radius: 2px;
+      outline: none;
+      margin-bottom: 14px;
+    }
+
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--accent);
+      cursor: pointer;
+      transition: transform 0.15s;
+    }
+
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+    .overhead-note {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    .overhead-note span { color: var(--warn); }
+
+    .transfer-btn {
+      width: 100%;
+      padding: 13px;
+      background: var(--accent);
+      color: #0a0a0a;
+      border: none;
+      border-radius: 10px;
+      font-family: var(--font-display);
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .transfer-btn:hover { opacity: 0.88; }
+    .transfer-btn:active { transform: scale(0.98); }
+    .transfer-btn:disabled {
+      background: var(--surface2);
+      color: var(--muted);
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    /* ── Log ── */
+    .log {
+      background: var(--surface);
+      border: 0.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.25rem;
+      display: none;
+    }
+
+    .log.visible { display: block; }
+
+    .log-entry {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      border-bottom: 0.5px solid var(--border);
+      font-family: var(--font-mono);
+      font-size: 12px;
+    }
+
+    .log-entry:last-child { border-bottom: none; }
+    .log-entry .to { color: var(--muted); }
+    .log-entry .to span { color: var(--text); }
+    .log-entry .amt { color: var(--accent); }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed;
+      bottom: 28px;
+      left: 50%;
+      transform: translateX(-50%) translateY(20px);
+      background: var(--surface);
+      border: 0.5px solid var(--border-bright);
+      border-radius: 99px;
+      padding: 10px 22px;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      color: var(--text);
+      opacity: 0;
+      transition: opacity 0.3s, transform 0.3s;
+      pointer-events: none;
+      white-space: nowrap;
+      z-index: 999;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Responsive ── */
+    @media (max-width: 400px) {
+      .phones { grid-template-columns: 1fr 36px 1fr; gap: 6px; }
+      .phone-card { padding: 1rem 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+<div class="wrapper">
+
+  <header>
+    <div class="logo">
+      <div class="logo-icon">⚡</div>
+      <div class="logo-text">Battery<span>Share</span></div>
+    </div>
+    <p>// transfer your charge to someone who needs it</p>
+  </header>
+
+  <!-- Phones -->
+  <div class="phones">
+    <div class="phone-card sender">
+      <div class="label">You</div>
+      <div class="phone-name">My Phone</div>
+      <div class="battery-wrap">
+        <div class="battery-shell">
+          <div class="battery-fill" id="my-fill"></div>
+        </div>
+        <div class="battery-pct" id="my-pct">72%</div>
+      </div>
+    </div>
+
+    <div class="arrow-col">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="5" y1="12" x2="19" y2="12"/>
+        <polyline points="12 5 19 12 12 19"/>
+      </svg>
+    </div>
+
+    <div class="phone-card">
+      <div class="label">Recipient</div>
+      <div class="phone-name" id="recipient-name">Amani</div>
+      <div class="battery-wrap">
+        <div class="battery-shell">
+          <div class="battery-fill" id="their-fill"></div>
+        </div>
+        <div class="battery-pct" id="their-pct">18%</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contacts -->
+  <div class="section-label">Send to</div>
+  <div class="contacts" id="contacts"></div>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div class="slider-row">
+      <span class="key">Transfer amount</span>
+      <span class="val" id="amount-out">10%</span>
+    </div>
+    <input type="range" min="1" max="50" value="10" step="1" id="amount-slider">
+    <div class="overhead-note">⚡ <span id="loss-text">0.2% lost in transfer</span> — they receive <span id="receive-text" style="color:var(--text)">9.8%</span></div>
+    <button class="transfer-btn" id="transfer-btn" onclick="doTransfer()">Send 10% to Amani</button>
+  </div>
+
+  <!-- Log -->
+  <div class="log" id="log">
+    <div class="section-label" style="margin-bottom:10px;">Transfer history</div>
+    <div id="log-entries"></div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  const contacts = [
+    { name: 'Amani', battery: 18 },
+    { name: 'Kofi', battery: 6 },
+    { name: 'Njeri', battery: 44 },
+    { name: 'Daudi', battery: 31 },
+  ];
+
+  let myBattery = 72;
+  let selected = 0;
+  let amount = 10;
+  const OVERHEAD = 0.02;
+  const history = [];
+
+  function batteryColor(p) {
+    if (p <= 20) return '#ff4f4f';
+    if (p <= 40) return '#ffb347';
+    return '#b6ff6a';
+  }
+
+  function renderBattery(fillId, shellId, pct) {
+    const fill = document.getElementById(fillId);
+    const shell = document.getElementById(shellId);
+    const h = Math.max(0, Math.min(100, pct));
+    fill.style.height = (h / 100 * 74) + 'px';
+    fill.style.background = batteryColor(pct);
+    if (shell) shell.style.borderColor = batteryColor(pct);
+  }
+
+  function renderAll() {
+    const c = contacts[selected];
+    document.getElementById('my-pct').textContent = Math.round(myBattery) + '%';
+    document.getElementById('their-pct').textContent = Math.round(c.battery) + '%';
+    document.getElementById('recipient-name').textContent = c.name;
+
+    renderBattery('my-fill', null, myBattery);
+    renderBattery('their-fill', null, c.battery);
+
+    const shells = document.querySelectorAll('.battery-shell');
+    if (shells[0]) shells[0].style.borderColor = batteryColor(myBattery);
+    if (shells[1]) shells[1].style.borderColor = batteryColor(c.battery);
+
+    const loss = +(amount * OVERHEAD).toFixed(1);
+    const recv = +(amount - loss).toFixed(1);
+    document.getElementById('loss-text').textContent = loss + '% lost in transfer';
+    document.getElementById('receive-text').textContent = recv + '%';
+    document.getElementById('amount-out').textContent = amount + '%';
+    document.getElementById('transfer-btn').textContent = `Send ${amount}% to ${c.name}`;
+    document.getElementById('transfer-btn').disabled = myBattery < amount + 5;
+  }
+
+  function buildContacts() {
+    const wrap = document.getElementById('contacts');
+    wrap.innerHTML = '';
+    contacts.forEach((c, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'chip' + (i === selected ? ' active' : '');
+      btn.textContent = c.name + ' ' + Math.round(c.battery) + '%';
+      btn.onclick = () => { selected = i; buildContacts(); renderAll(); };
+      wrap.appendChild(btn);
+    });
+  }
+
+  document.getElementById('amount-slider').addEventListener('input', function () {
+    amount = parseInt(this.value);
+    renderAll();
+  });
+
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(() => t.classList.remove('show'), 2600);
+  }
+
+  function doTransfer() {
+    const c = contacts[selected];
+    if (myBattery < amount + 5) { showToast('⚠ Not enough battery!'); return; }
+    const loss = amount * OVERHEAD;
+    const recv = +(amount - loss).toFixed(1);
+    myBattery = +(myBattery - amount).toFixed(1);
+    c.battery = Math.min(100, +(c.battery + recv).toFixed(1));
+    history.unshift({ to: c.name, sent: amount, recv });
+    renderAll();
+    buildContacts();
+    showToast(`✓ Sent ${amount}% to ${c.name}!`);
+    renderLog();
+  }
+
+  function renderLog() {
+    if (!history.length) return;
+    const log = document.getElementById('log');
+    log.classList.add('visible');
+    document.getElementById('log-entries').innerHTML = history.slice(0, 6).map(h =>
+      `<div class="log-entry">
+        <span class="to">→ <span>${h.to}</span></span>
+        <span class="amt">−${h.sent}% (${h.recv}% received)</span>
+      </div>`
+    ).join('');
+  }
+
+  buildContacts();
+  renderAll();
+</script>
+</body>
+</html>
