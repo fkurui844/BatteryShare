@@ -6,6 +6,24 @@
   <title>BatteryShare</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Syne:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Firebase SDKs — must be in <head> so they're ready before body scripts run -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
+  <script>
+    firebase.initializeApp({
+      apiKey:            "AIzaSyCu1BuJPcf3-bBEVl6OXn9sVuC8p9TLgRI",
+      authDomain:        "batteryshare-768ba.firebaseapp.com",
+      databaseURL:       "https://batteryshare-768ba-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId:         "batteryshare-768ba",
+      storageBucket:     "batteryshare-768ba.firebasestorage.app",
+      messagingSenderId: "753524399132",
+      appId:             "1:753524399132:web:d32ff9282fa2c63dbfd3d9"
+    });
+    const fbAuth = firebase.auth();
+    const rtdb   = firebase.database();
+  </script>
   <style>
 /* ═══════════════════════════════════════
    BatteryShare — stylesheet
@@ -82,7 +100,6 @@ body, body * { transition: background-color 0.28s ease, border-color 0.28s ease,
 }
 .theme-toggle:hover { border-color: var(--accent); color: var(--accent); }
 
-/* Light-mode grid tint */
 [data-theme="light"] .grid-lines {
   background-image:
     linear-gradient(rgba(74,158,0,0.06) 1px, transparent 1px),
@@ -91,8 +108,6 @@ body, body * { transition: background-color 0.28s ease, border-color 0.28s ease,
 [data-theme="light"] .glow-orb {
   background: radial-gradient(circle, rgba(74,158,0,0.10) 0%, transparent 65%);
 }
-
-/* Light: keep btn-primary readable */
 [data-theme="light"] .btn-primary { color: #ffffff; }
 [data-theme="light"] .modal { box-shadow: 0 8px 40px rgba(0,0,0,0.12); }
 
@@ -219,6 +234,7 @@ body { background: var(--bg); color: var(--text); font-family: var(--font-d); ov
 }
 
 input[type=text],
+input[type=email],
 input[type=password],
 .select-field {
   width: 100%;
@@ -235,6 +251,7 @@ input[type=password],
 }
 
 input[type=text]:focus,
+input[type=email]:focus,
 input[type=password]:focus,
 .select-field:focus { border-color: var(--accent); }
 
@@ -816,6 +833,29 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--surf3); border-radius: 2px; }
 
+/* ── Loading overlay ── */
+.loading-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  z-index: 999;
+  font-family: var(--font-m);
+  font-size: 13px;
+  color: var(--text3);
+  letter-spacing: 0.05em;
+}
+.loading-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--accent);
+  animation: ldot 1.2s ease-in-out infinite;
+}
+@keyframes ldot { 0%,100%{opacity:0.2;transform:scale(0.8)} 50%{opacity:1;transform:scale(1)} }
+
 /* ── Responsive ── */
 @media (max-width: 520px) {
   .tab { padding: 1.25rem; }
@@ -827,8 +867,14 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 </head>
 <body>
 
+<!-- ══ LOADING ══ -->
+<div class="loading-overlay" id="loading-overlay">
+  <div class="loading-dot"></div>
+  <span>connecting…</span>
+</div>
+
 <!-- ══ AUTH SCREEN ══ -->
-<div id="screen-auth" class="screen active">
+<div id="screen-auth" class="screen">
   <div class="auth-bg">
     <div class="grid-lines"></div>
     <div class="glow-orb"></div>
@@ -1046,265 +1092,32 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 <button class="theme-toggle" id="theme-toggle" onclick="App.toggleTheme()" title="Toggle light / dark mode">🌙</button>
 
 <script>
-/**
- * BatteryShare — DB layer (localStorage-backed, simulates a shared backend)
- * All data lives in localStorage under 'bshare_db'
- */
-const DB = (() => {
-
-  const KEY = 'bshare_db';
-
-  /* ── Seed data ── */
-  const SEED = {
-    users: {
-      amani:  { id: 'amani',  name: 'Amani Kamau',    password: 'demo', battery: 62, online: true,  avatarIdx: 0, totalGiven: 0,    totalReceived: 0 },
-      kofi:   { id: 'kofi',   name: 'Kofi Mensah',    password: 'demo', battery: 14, online: true,  avatarIdx: 1, totalGiven: 0,    totalReceived: 0 },
-      njeri:  { id: 'njeri',  name: 'Njeri Wanjiku',  password: 'demo', battery: 78, online: false, avatarIdx: 2, totalGiven: 0,    totalReceived: 0 },
-      daudi:  { id: 'daudi',  name: 'Daudi Ochieng',  password: 'demo', battery: 31, online: true,  avatarIdx: 3, totalGiven: 0,    totalReceived: 0 },
-      fatuma: { id: 'fatuma', name: 'Fatuma Hassan',  password: 'demo', battery: 55, online: false, avatarIdx: 4, totalGiven: 0,    totalReceived: 0 },
-      jabari: { id: 'jabari', name: 'Jabari Oduya',   password: 'demo', battery: 88, online: true,  avatarIdx: 5, totalGiven: 0,    totalReceived: 0 },
-    },
-    contacts: {
-      /* uid → [uid, uid] */
-      amani:  ['kofi', 'njeri'],
-      kofi:   ['amani', 'daudi'],
-      njeri:  ['amani'],
-      daudi:  ['kofi'],
-      fatuma: [],
-      jabari: [],
-    },
-    /* contact requests: { id, from, to, status:'pending'|'accepted'|'declined', ts } */
-    contactRequests: [],
-    /* charge requests: { id, from, to, amount, status:'pending'|'accepted'|'declined', ts } */
-    chargeRequests: [],
-    /* transfers: { id, from, to, amount, received, ts } */
-    transfers: [],
-  };
-
-  function load() {
-    try {
-      const raw = localStorage.getItem(KEY);
-      if (raw) return JSON.parse(raw);
-    } catch (_) {}
-    return null;
-  }
-
-  function save(db) {
-    localStorage.setItem(KEY, JSON.stringify(db));
-  }
-
-  function init() {
-    if (!load()) save(SEED);
-  }
-
-  function get() {
-    return load() || SEED;
-  }
-
-  function uid() {
-    return Math.random().toString(36).slice(2, 10);
-  }
-
-  /* ════ AUTH ════ */
-  function getUser(username) {
-    return get().users[username] || null;
-  }
-
-  function authenticate(username, password) {
-    const u = getUser(username);
-    if (!u) return { ok: false, error: 'User not found' };
-    if (u.password !== password) return { ok: false, error: 'Wrong password' };
-    return { ok: true, user: u };
-  }
-
-  function createUser(name, username, password) {
-    const db = get();
-    if (db.users[username]) return { ok: false, error: 'Username taken' };
-    if (!username.match(/^[a-z0-9_]{2,20}$/)) return { ok: false, error: 'Username: 2-20 lowercase letters, numbers, _' };
-    db.users[username] = {
-      id: username, name, password,
-      battery: Math.floor(Math.random() * 40) + 40,
-      online: true,
-      avatarIdx: Object.keys(db.users).length % 6,
-      totalGiven: 0, totalReceived: 0
-    };
-    db.contacts[username] = [];
-    save(db);
-    return { ok: true, user: db.users[username] };
-  }
-
-  function setOnline(username, online) {
-    const db = get();
-    if (db.users[username]) { db.users[username].online = online; save(db); }
-  }
-
-  /* ════ CONTACTS ════ */
-  function getContacts(username) {
-    const db = get();
-    const ids = db.contacts[username] || [];
-    return ids.map(id => db.users[id]).filter(Boolean);
-  }
-
-  function addContact(fromId, toId) {
-    const db = get();
-    if (!db.contacts[fromId].includes(toId)) db.contacts[fromId].push(toId);
-    if (!db.contacts[toId].includes(fromId))  db.contacts[toId].push(fromId);
-    save(db);
-  }
-
-  function searchUsers(query, excludeId) {
-    if (!query || query.length < 2) return [];
-    const db = get();
-    const q = query.toLowerCase();
-    return Object.values(db.users).filter(u =>
-      u.id !== excludeId &&
-      (u.id.includes(q) || u.name.toLowerCase().includes(q))
-    ).slice(0, 6);
-  }
-
-  /* ════ CONTACT REQUESTS ════ */
-  function sendContactRequest(fromId, toId) {
-    const db = get();
-    const exists = db.contactRequests.find(r =>
-      r.from === fromId && r.to === toId && r.status === 'pending'
-    );
-    if (exists) return { ok: false, error: 'Request already sent' };
-    if ((db.contacts[fromId] || []).includes(toId)) return { ok: false, error: 'Already a contact' };
-    db.contactRequests.push({ id: uid(), from: fromId, to: toId, status: 'pending', ts: Date.now() });
-    save(db);
-    return { ok: true };
-  }
-
-  function getContactRequests(userId) {
-    const db = get();
-    const incoming = db.contactRequests.filter(r => r.to === userId && r.status === 'pending')
-      .map(r => ({ ...r, fromUser: db.users[r.from] }));
-    const outgoing = db.contactRequests.filter(r => r.from === userId && r.status === 'pending')
-      .map(r => ({ ...r, toUser: db.users[r.to] }));
-    return { incoming, outgoing };
-  }
-
-  function respondContactRequest(reqId, accept) {
-    const db = get();
-    const req = db.contactRequests.find(r => r.id === reqId);
-    if (!req) return;
-    req.status = accept ? 'accepted' : 'declined';
-    if (accept) addContact(req.from, req.to);
-    else save(db);
-  }
-
-  /* ════ CHARGE REQUESTS ════ */
-  function sendChargeRequest(fromId, toId, amount) {
-    const db = get();
-    db.chargeRequests.push({ id: uid(), from: fromId, to: toId, amount, status: 'pending', ts: Date.now() });
-    save(db);
-    return { ok: true };
-  }
-
-  function getChargeRequests(userId) {
-    const db = get();
-    const incoming = db.chargeRequests.filter(r => r.to === userId && r.status === 'pending')
-      .map(r => ({ ...r, fromUser: db.users[r.from] }));
-    const outgoing = db.chargeRequests.filter(r => r.from === userId && r.status === 'pending')
-      .map(r => ({ ...r, toUser: db.users[r.to] }));
-    return { incoming, outgoing };
-  }
-
-  function respondChargeRequest(reqId, accept, currentUserId) {
-    const db = get();
-    const req = db.chargeRequests.find(r => r.id === reqId);
-    if (!req) return { ok: false };
-    req.status = accept ? 'accepted' : 'declined';
-    if (accept) {
-      // req.from = requester (wants to RECEIVE battery)
-      // req.to   = provider  (will SEND battery, i.e. the currentUser accepting)
-      const requester = db.users[req.from];
-      const provider  = db.users[req.to];
-      if (!requester || !provider) { save(db); return { ok: false, error: 'User not found' }; }
-      if (provider.battery < req.amount + 5) { save(db); return { ok: false, error: 'Not enough battery (keep at least 5%)' }; }
-      const overhead = req.amount * 0.02;
-      const received = +(req.amount - overhead).toFixed(1);
-      provider.battery         = Math.max(0,   +(provider.battery  - req.amount).toFixed(1));
-      requester.battery        = Math.min(100, +(requester.battery + received).toFixed(1));
-      provider.totalGiven      = +(provider.totalGiven    + req.amount).toFixed(1);
-      requester.totalReceived  = +(requester.totalReceived + received).toFixed(1);
-      // transfer log: from = provider (who sent), to = requester (who received)
-      db.transfers.push({ id: uid(), from: req.to, to: req.from, amount: req.amount, received, ts: Date.now() });
-    }
-    save(db);
-    return { ok: true };
-  }
-
-  /* ════ TRANSFERS (direct send) ════ */
-  function transfer(fromId, toId, amount) {
-    const db = get();
-    const sender   = db.users[fromId];
-    const receiver = db.users[toId];
-    if (!sender || !receiver)    return { ok: false, error: 'User not found' };
-    if (sender.battery < amount + 5) return { ok: false, error: 'Not enough battery (keep at least 5%)' };
-    const overhead = amount * 0.02;
-    const received = +(amount - overhead).toFixed(1);
-    sender.battery   = Math.max(0, +(sender.battery - amount).toFixed(1));
-    receiver.battery = Math.min(100, +(receiver.battery + received).toFixed(1));
-    sender.totalGiven      = +(sender.totalGiven + amount).toFixed(1);
-    receiver.totalReceived = +(receiver.totalReceived + received).toFixed(1);
-    db.transfers.push({ id: uid(), from: fromId, to: toId, amount, received, ts: Date.now() });
-    save(db);
-    return { ok: true, sender, receiver };
-  }
-
-  function getTransfers(userId) {
-    const db = get();
-    return db.transfers
-      .filter(t => t.from === userId || t.to === userId)
-      .sort((a, b) => b.ts - a.ts)
-      .map(t => ({ ...t, fromUser: db.users[t.from], toUser: db.users[t.to] }));
-  }
-
-  /* ════ MISC ════ */
-  function getAllOnline(excludeId) {
-    const db = get();
-    return Object.values(db.users).filter(u => u.online && u.id !== excludeId);
-  }
-
-  function pendingRequestCount(userId) {
-    const db = get();
-    const charges  = db.chargeRequests.filter(r => r.to === userId && r.status === 'pending').length;
-    const contacts = db.contactRequests.filter(r => r.to === userId && r.status === 'pending').length;
-    return { charges, contacts };
-  }
-
-  function refreshUser(userId) {
-    return get().users[userId] || null;
-  }
-
-  init();
-
-  return {
-    authenticate, createUser, getUser, setOnline, refreshUser,
-    getContacts, searchUsers, sendContactRequest, getContactRequests, respondContactRequest, addContact,
-    sendChargeRequest, getChargeRequests, respondChargeRequest,
-    transfer, getTransfers,
-    getAllOnline, pendingRequestCount,
-  };
-
-})();
-
-</script>
-<script>
-/**
- * BatteryShare — App logic
- */
+/* ══════════════════════════════════════════════════════
+   BatteryShare — App
+   All data lives in Firebase Realtime Database.
+   DB layout:
+     /users/{uid}            – profile + battery
+     /usernames/{username}   – uid  (for username lookup)
+     /contacts/{uid}/{cuid}  – true (mutual)
+     /contactRequests/{id}   – { from, fromName, fromUsername, fromAvatarIdx, to, status, ts }
+     /chargeRequests/{id}    – { from, fromName, …, to, toName, …, amount, status, ts }
+     /transfers/{id}         – { from, fromName, …, to, toName, …, amount, received, ts }
+══════════════════════════════════════════════════════ */
 const App = (() => {
 
-  let currentUser = null;
-  let pollInterval = null;
-  let deviceBattery = null;   // real device battery %
-  let deviceCharging = false;
+  /* ── State ── */
+  let currentUser  = null;   // { uid, name, username, battery, avatarIdx, totalGiven, totalReceived, online }
+  let contactsCache        = [];
+  let transfersCache       = [];
+  let contactReqCache      = { incoming: [], outgoing: [] };
+  let chargeReqCache       = { incoming: [], outgoing: [] };
+  let activeListeners      = [];   // { ref, event, cb } to detach on logout
+  let deviceBattery        = null;
+  let deviceCharging       = false;
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
      THEME
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
   let isDark = localStorage.getItem('bshare_theme') !== 'light';
 
   function applyTheme() {
@@ -1319,50 +1132,55 @@ const App = (() => {
     applyTheme();
   }
 
-  // Apply immediately on load
   applyTheme();
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
      UTILS
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
+  const toEmail = u => u.toLowerCase().trim() + '@batteryshare.app';
+
   function batteryColor(p) {
     if (p <= 20) return '#ff5252';
     if (p <= 40) return '#ffb347';
     return '#b6ff6a';
   }
-
-  function avatarClass(idx) { return `av-${(idx || 0) % 6}`; }
-
+  function avatarClass(i) { return 'av-' + ((i || 0) % 6); }
   function initials(name) {
-    return name.split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
+    return (name || '?').split(' ').slice(0,2).map(w => w[0]).join('').toUpperCase();
   }
-
   function timeAgo(ts) {
     const s = Math.floor((Date.now() - ts) / 1000);
     if (s < 60)    return 'just now';
-    if (s < 3600)  return `${Math.floor(s/60)}m ago`;
-    if (s < 86400) return `${Math.floor(s/3600)}h ago`;
-    return `${Math.floor(s/86400)}d ago`;
+    if (s < 3600)  return Math.floor(s/60)  + 'm ago';
+    if (s < 86400) return Math.floor(s/3600) + 'h ago';
+    return Math.floor(s/86400) + 'd ago';
   }
-
-  function toast(msg, duration = 2600) {
+  function toast(msg, dur = 2800) {
     const el = document.getElementById('toast');
     el.textContent = msg;
     el.classList.add('show');
     clearTimeout(el._t);
-    el._t = setTimeout(() => el.classList.remove('show'), duration);
+    el._t = setTimeout(() => el.classList.remove('show'), dur);
+  }
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+  }
+  function hideLoading() {
+    document.getElementById('loading-overlay').style.display = 'none';
+  }
+  function listen(ref, event, cb) {
+    ref.on(event, cb);
+    activeListeners.push({ ref, event, cb });
+  }
+  function detachAll() {
+    activeListeners.forEach(({ ref, event, cb }) => ref.off(event, cb));
+    activeListeners = [];
   }
 
-  function renderMiniShell(shellEl, fillEl, pct) {
-    const fill = document.querySelector(fillEl);
-    const shell = document.querySelector(shellEl);
-    if (!fill || !shell) return;
-    const h = Math.max(0, Math.min(100, pct));
-    fill.style.height = (h / 100 * 28) + 'px';
-    fill.style.background = batteryColor(pct);
-    shell.style.borderColor = batteryColor(pct);
-  }
-
+  /* ════════════════════════════════
+     BATTERY DISPLAY
+  ════════════════════════════════ */
   function setHeaderBattery(pct, charging) {
     const fill  = document.getElementById('hb-fill');
     const pctEl = document.getElementById('hb-pct');
@@ -1370,282 +1188,415 @@ const App = (() => {
     const srcEl = document.getElementById('hb-source');
     if (!fill) return;
     const p = Math.round(pct);
-    fill.style.height = (Math.min(100, p) / 100 * 44) + 'px';
+    fill.style.height     = (Math.min(100,p)/100*44) + 'px';
     fill.style.background = batteryColor(p);
     shell.style.borderColor = batteryColor(p);
-    pctEl.textContent = p + '%';
-    pctEl.style.color = batteryColor(p);
+    pctEl.textContent   = p + '%';
+    pctEl.style.color   = batteryColor(p);
     if (srcEl) {
-      if (deviceBattery !== null) {
-        srcEl.textContent = charging ? '⚡ charging' : 'your device';
-        srcEl.style.color = charging ? 'var(--accent)' : 'var(--text2)';
-      } else {
-        srcEl.textContent = 'simulated';
-        srcEl.style.color = 'var(--text3)';
-      }
+      srcEl.textContent = deviceBattery !== null
+        ? (charging ? '⚡ charging' : 'your device') : 'simulated';
+      srcEl.style.color = (deviceBattery !== null && charging)
+        ? 'var(--accent)' : 'var(--text3)';
     }
   }
 
-  /* ══════════════════════════════════
-     AUTH
-  ══════════════════════════════════ */
-  function showScreen(id) {
-    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-    document.getElementById(id).classList.add('active');
+  function flashShell() {
+    const shell = document.getElementById('hb-shell');
+    if (!shell) return;
+    shell.style.boxShadow = '0 0 0 2px var(--danger)';
+    setTimeout(() => { shell.style.boxShadow = ''; }, 600);
   }
 
+  /* ════════════════════════════════
+     AUTH — UI helpers
+  ════════════════════════════════ */
   function showLogin() {
     document.getElementById('form-login').classList.remove('hidden');
     document.getElementById('form-register').classList.add('hidden');
   }
-
   function showRegister() {
     document.getElementById('form-login').classList.add('hidden');
     document.getElementById('form-register').classList.remove('hidden');
   }
 
-  function login() {
+  /* ════════════════════════════════
+     AUTH — Login
+  ════════════════════════════════ */
+  async function login() {
     const username = document.getElementById('login-username').value.trim().toLowerCase();
     const password = document.getElementById('login-password').value;
-    const errEl = document.getElementById('login-error');
-    const res = DB.authenticate(username, password);
-    if (!res.ok) { errEl.textContent = res.error; return; }
+    const errEl    = document.getElementById('login-error');
     errEl.textContent = '';
-    DB.setOnline(username, true);
-    currentUser = DB.refreshUser(username);
-    enterApp();
+    if (!username || !password) { errEl.textContent = 'Fill in all fields'; return; }
+    try {
+      const cred = await fbAuth.signInWithEmailAndPassword(toEmail(username), password);
+      const snap = await rtdb.ref('users/' + cred.user.uid).get();
+      if (!snap.exists()) throw new Error('Profile missing — contact support');
+      currentUser = { uid: cred.user.uid, ...snap.val() };
+      await rtdb.ref('users/' + currentUser.uid + '/online').set(true);
+      enterApp();
+    } catch(e) {
+      errEl.textContent =
+        e.code === 'auth/wrong-password'     ? 'Wrong password'  :
+        e.code === 'auth/user-not-found'     ? 'User not found'  :
+        e.code === 'auth/invalid-credential' ? 'Invalid credentials' : e.message;
+    }
   }
 
-  function demoLogin(username) {
-    DB.setOnline(username, true);
-    currentUser = DB.refreshUser(username);
-    enterApp();
-  }
-
-  function register() {
+  /* ════════════════════════════════
+     AUTH — Register
+  ════════════════════════════════ */
+  async function register() {
     const name     = document.getElementById('reg-name').value.trim();
     const username = document.getElementById('reg-username').value.trim().toLowerCase();
     const password = document.getElementById('reg-password').value;
     const errEl    = document.getElementById('reg-error');
+    errEl.textContent = '';
     if (!name)     { errEl.textContent = 'Enter your name'; return; }
-    if (!password) { errEl.textContent = 'Enter a password'; return; }
-    const res = DB.createUser(name, username, password);
-    if (!res.ok) { errEl.textContent = res.error; return; }
-    DB.setOnline(username, true);
-    currentUser = res.user;
+    if (!username.match(/^[a-z0-9_]{2,20}$/)) {
+      errEl.textContent = 'Username: 2-20 lowercase letters, numbers, _'; return;
+    }
+    if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
+
+    const taken = await rtdb.ref('usernames/' + username).get();
+    if (taken.exists()) { errEl.textContent = 'Username already taken'; return; }
+
+    try {
+      const cred = await fbAuth.createUserWithEmailAndPassword(toEmail(username), password);
+      const uid  = cred.user.uid;
+      const profile = {
+        uid, name, username,
+        battery:       Math.floor(Math.random() * 40) + 40,
+        online:        true,
+        avatarIdx:     Math.floor(Math.random() * 6),
+        totalGiven:    0,
+        totalReceived: 0,
+      };
+      await rtdb.ref('users/' + uid).set(profile);
+      await rtdb.ref('usernames/' + username).set(uid);
+      currentUser = profile;
+      enterApp();
+    } catch(e) { errEl.textContent = e.message; }
+  }
+
+  /* ════════════════════════════════
+     AUTH — Demo login
+  ════════════════════════════════ */
+  const DEMO_DATA = {
+    amani:  { name: 'Amani Kamau',   battery: 62, avatarIdx: 0 },
+    kofi:   { name: 'Kofi Mensah',   battery: 14, avatarIdx: 1 },
+    njeri:  { name: 'Njeri Wanjiku', battery: 78, avatarIdx: 2 },
+    daudi:  { name: 'Daudi Ochieng', battery: 31, avatarIdx: 3 },
+  };
+
+  async function demoLogin(username) {
+    const d = DEMO_DATA[username];
+    if (!d) return;
+    try {
+      // Try sign-in first
+      const cred = await fbAuth.signInWithEmailAndPassword(toEmail(username), 'demo123');
+      const snap = await rtdb.ref('users/' + cred.user.uid).get();
+      if (snap.exists()) {
+        currentUser = { uid: cred.user.uid, ...snap.val() };
+      } else {
+        // Profile missing — write it
+        currentUser = { uid: cred.user.uid, username, ...d, online: true, totalGiven: 0, totalReceived: 0 };
+        await rtdb.ref('users/' + cred.user.uid).set(currentUser);
+        await rtdb.ref('usernames/' + username).set(cred.user.uid);
+      }
+    } catch(e) {
+      // Account doesn't exist — create it
+      if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-credential') {
+        try {
+          const cred = await fbAuth.createUserWithEmailAndPassword(toEmail(username), 'demo123');
+          const uid  = cred.user.uid;
+          currentUser = { uid, username, ...d, online: true, totalGiven: 0, totalReceived: 0 };
+          await rtdb.ref('users/' + uid).set(currentUser);
+          await rtdb.ref('usernames/' + username).set(uid);
+        } catch(e2) { toast('⚠ ' + e2.message); return; }
+      } else { toast('⚠ ' + e.message); return; }
+    }
+    await rtdb.ref('users/' + currentUser.uid + '/online').set(true);
     enterApp();
   }
 
-  function logout() {
-    if (currentUser) DB.setOnline(currentUser.id, false);
-    clearInterval(pollInterval);
-    currentUser = null;
+  /* ════════════════════════════════
+     AUTH — Logout
+  ════════════════════════════════ */
+  async function logout() {
+    if (currentUser) {
+      await rtdb.ref('users/' + currentUser.uid + '/online').set(false).catch(() => {});
+    }
+    detachAll();
+    contactsCache    = [];
+    transfersCache   = [];
+    contactReqCache  = { incoming: [], outgoing: [] };
+    chargeReqCache   = { incoming: [], outgoing: [] };
+    currentUser      = null;
+    await fbAuth.signOut();
     showScreen('screen-auth');
     showLogin();
   }
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
      ENTER APP
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
+  function enterApp() {
+    showScreen('screen-app');
+    setTab('home');
+    startListeners();
+    initDeviceBattery();
+  }
+
   function initDeviceBattery() {
-    if (!navigator.getBattery) { deviceBattery = null; return; }
+    if (!navigator.getBattery) return;
     navigator.getBattery().then(bat => {
       function update() {
         deviceBattery  = Math.round(bat.level * 100);
         deviceCharging = bat.charging;
-        // write real device % into the user's stored record
-        const raw = localStorage.getItem('bshare_db');
-        if (raw) {
-          try {
-            const db = JSON.parse(raw);
-            if (db.users && db.users[currentUser.id]) {
-              db.users[currentUser.id].battery = deviceBattery;
-              localStorage.setItem('bshare_db', JSON.stringify(db));
-            }
-          } catch(_) {}
-        }
-        currentUser = DB.refreshUser(currentUser.id);
         setHeaderBattery(deviceBattery, deviceCharging);
-        updateStats();
-        updateSendNote();
+        rtdb.ref('users/' + currentUser.uid + '/battery').set(deviceBattery).catch(() => {});
       }
       bat.addEventListener('levelchange',    update);
       bat.addEventListener('chargingchange', update);
       update();
-    }).catch(() => { deviceBattery = null; });
+    }).catch(() => {});
   }
 
-  function enterApp() {
-    showScreen('screen-app');
-    setTab('home');
-    startPolling();
-    renderAll();
-    initDeviceBattery();
+  /* ════════════════════════════════
+     REAL-TIME LISTENERS
+  ════════════════════════════════ */
+  function startListeners() {
+
+    // 1 — current user profile (fires instantly on any field change)
+    const userRef = rtdb.ref('users/' + currentUser.uid);
+    listen(userRef, 'value', snap => {
+      if (!snap.exists()) return;
+      currentUser = { uid: currentUser.uid, ...snap.val() };
+      renderHome();
+    });
+
+    // 2 — contacts list → resolve profiles
+    const contactsRef = rtdb.ref('contacts/' + currentUser.uid);
+    listen(contactsRef, 'value', async snap => {
+      const uids = snap.exists() ? Object.keys(snap.val()) : [];
+      if (!uids.length) {
+        contactsCache = [];
+        renderContacts(); renderOnlineList(); updateSendPanel();
+        return;
+      }
+      const snaps = await Promise.all(uids.map(u => rtdb.ref('users/' + u).get()));
+      contactsCache = snaps.filter(s => s.exists()).map(s => ({ uid: s.key, ...s.val() }));
+      renderContacts(); renderOnlineList(); updateSendPanel();
+    });
+
+    // 3 — contact requests (filter client-side)
+    const cReqRef = rtdb.ref('contactRequests');
+    listen(cReqRef, 'value', snap => {
+      const all = snap.exists()
+        ? Object.entries(snap.val()).map(([id, v]) => ({ id, ...v }))
+        : [];
+      contactReqCache.incoming = all.filter(r => r.to   === currentUser.uid && r.status === 'pending');
+      contactReqCache.outgoing = all.filter(r => r.from === currentUser.uid && r.status === 'pending');
+      renderRequests(); updateBadges();
+    });
+
+    // 4 — charge requests
+    const chReqRef = rtdb.ref('chargeRequests');
+    listen(chReqRef, 'value', snap => {
+      const all = snap.exists()
+        ? Object.entries(snap.val()).map(([id, v]) => ({ id, ...v }))
+        : [];
+      chargeReqCache.incoming = all.filter(r => r.to   === currentUser.uid && r.status === 'pending');
+      chargeReqCache.outgoing = all.filter(r => r.from === currentUser.uid && r.status === 'pending');
+      renderRequests(); updateBadges();
+    });
+
+    // 5 — transfer history
+    const txRef = rtdb.ref('transfers');
+    listen(txRef, 'value', snap => {
+      const all = snap.exists()
+        ? Object.entries(snap.val()).map(([id, v]) => ({ id, ...v }))
+        : [];
+      transfersCache = all
+        .filter(t => t.from === currentUser.uid || t.to === currentUser.uid)
+        .sort((a, b) => b.ts - a.ts);
+      renderHistory();
+    });
   }
 
-  function renderAll() {
-    currentUser = DB.refreshUser(currentUser.id);
-    renderHome();
-    renderContacts();
-    renderRequests();
-    renderHistory();
-    updateBadges();
-  }
-
-  /* ══════════════════════════════════
-     POLLING (simulates real-time)
-  ══════════════════════════════════ */
-  function startPolling() {
-    clearInterval(pollInterval);
-    pollInterval = setInterval(() => {
-      currentUser = DB.refreshUser(currentUser.id);
-      const activeTab = document.querySelector('.tab.active')?.id?.replace('tab-', '');
-      const displayPct = deviceBattery !== null ? deviceBattery : currentUser.battery;
-      setHeaderBattery(displayPct, deviceCharging);
-      updateStats();
-      updateBadges();
-      if (activeTab === 'home')     renderOnlineList();
-      if (activeTab === 'requests') renderRequests();
-      if (activeTab === 'contacts') renderContacts();
-      if (activeTab === 'history')  renderHistory();
-    }, 2000);
-  }
-
-  function updateBadges() {
-    const counts = DB.pendingRequestCount(currentUser.id);
-    const rb = document.getElementById('requests-badge');
-    const cb = document.getElementById('contacts-badge');
-    const total = counts.charges + counts.contacts;
-    rb.classList.toggle('show', counts.charges > 0);
-    cb.classList.toggle('show', counts.contacts > 0);
-  }
-
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
      TABS
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
   function setTab(name) {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-    document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tab-${name}`).classList.add('active');
-    document.querySelector(`[data-tab="${name}"]`)?.classList.add('active');
-    if (name === 'home')     renderHome();
-    if (name === 'contacts') renderContacts();
-    if (name === 'requests') renderRequests();
-    if (name === 'history')  renderHistory();
+    document.querySelectorAll('.nav-btn[data-tab]').forEach(b => b.classList.remove('active'));
+    document.getElementById('tab-' + name).classList.add('active');
+    const navBtn = document.querySelector('[data-tab="' + name + '"]');
+    if (navBtn) navBtn.classList.add('active');
   }
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
+     BADGES
+  ════════════════════════════════ */
+  function updateBadges() {
+    document.getElementById('requests-badge').classList.toggle('show', chargeReqCache.incoming.length  > 0);
+    document.getElementById('contacts-badge').classList.toggle('show', contactReqCache.incoming.length > 0);
+  }
+
+  /* ════════════════════════════════
      HOME
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
   function renderHome() {
-    currentUser = DB.refreshUser(currentUser.id);
+    if (!currentUser) return;
     const hour = new Date().getHours();
-    const greeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
-    document.getElementById('home-greeting').textContent = greeting + ', ' + currentUser.name.split(' ')[0];
-    document.getElementById('home-username').textContent = '@' + currentUser.id;
-    const displayPct = deviceBattery !== null ? deviceBattery : currentUser.battery;
-    setHeaderBattery(displayPct, deviceCharging);
+    document.getElementById('home-greeting').textContent =
+      (hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening') +
+      ', ' + currentUser.name.split(' ')[0];
+    document.getElementById('home-username').textContent = '@' + currentUser.username;
+    const pct = deviceBattery !== null ? deviceBattery : (currentUser.battery || 0);
+    setHeaderBattery(pct, deviceCharging);
     updateStats();
-    updateSendPanel();
     renderOnlineList();
+    updateSendPanel();
   }
 
   function updateStats() {
-    document.getElementById('stat-given').textContent    = currentUser.totalGiven + '%';
-    document.getElementById('stat-received').textContent = currentUser.totalReceived + '%';
-    document.getElementById('stat-contacts').textContent = DB.getContacts(currentUser.id).length;
+    if (!currentUser) return;
+    document.getElementById('stat-given').textContent    = (currentUser.totalGiven    || 0) + '%';
+    document.getElementById('stat-received').textContent = (currentUser.totalReceived || 0) + '%';
+    document.getElementById('stat-contacts').textContent = contactsCache.length;
   }
 
   function updateSendPanel() {
-    const contacts = DB.getContacts(currentUser.id);
-    const sel = document.getElementById('send-to');
+    const sel     = document.getElementById('send-to');
     const current = sel.value;
     sel.innerHTML = '<option value="">— pick a contact —</option>';
-    contacts.forEach(c => {
+    contactsCache.forEach(c => {
       const opt = document.createElement('option');
-      opt.value = c.id;
-      opt.textContent = `${c.name} (${Math.round(c.battery)}%)`;
-      if (c.id === current) opt.selected = true;
+      opt.value = c.uid;
+      opt.textContent = c.name + ' (' + Math.round(c.battery || 0) + '%)';
+      if (c.uid === current) opt.selected = true;
       sel.appendChild(opt);
     });
     updateSendNote();
   }
 
   function updateSendNote() {
-    const amount = parseInt(document.getElementById('send-slider').value);
+    const amount   = parseInt(document.getElementById('send-slider').value);
     const overhead = +(amount * 0.02).toFixed(1);
-    const recv    = +(amount - overhead).toFixed(1);
-    const afterBattery = Math.max(0, +(currentUser.battery - amount).toFixed(1));
+    const recv     = +(amount - overhead).toFixed(1);
+    const myBat    = currentUser ? (currentUser.battery || 0) : 0;
+    const after    = Math.max(0, +(myBat - amount).toFixed(1));
     document.getElementById('send-note').textContent =
-      `⚡ ${overhead}% overhead · they receive ${recv}% · your battery: ${currentUser.battery}% → ${afterBattery}%`;
+      '⚡ ' + overhead + '% overhead · they receive ' + recv + '% · your battery: ' + myBat + '% → ' + after + '%';
     document.getElementById('send-amount-val').textContent = amount + '%';
-    document.getElementById('send-btn').textContent = `Send ${amount}% →`;
+    document.getElementById('send-btn').textContent = 'Send ' + amount + '% →';
     const toId = document.getElementById('send-to').value;
-    document.getElementById('send-btn').disabled = !toId || currentUser.battery < amount + 5;
-  }
-
-  function sendCharge() {
-    const toId  = document.getElementById('send-to').value;
-    const amount = parseInt(document.getElementById('send-slider').value);
-    if (!toId) { toast('Pick a contact first'); return; }
-    const prevBattery = currentUser.battery;
-    const res = DB.transfer(currentUser.id, toId, amount);
-    if (!res.ok) { toast('⚠ ' + res.error); return; }
-    currentUser = DB.refreshUser(currentUser.id);
-    // Flash the header battery shell to highlight the change
-    const shell = document.getElementById('hb-shell');
-    if (shell) {
-      shell.style.transition = 'box-shadow 0.15s ease';
-      shell.style.boxShadow = '0 0 0 2px var(--danger)';
-      setTimeout(() => { shell.style.boxShadow = ''; }, 600);
-    }
-    toast(`⚡ Sent ${amount}% → ${res.receiver.name}  (you: ${prevBattery}% → ${currentUser.battery}%)`);
-    renderAll();
+    document.getElementById('send-btn').disabled = !toId || myBat < amount + 5;
   }
 
   function renderOnlineList() {
-    const contacts = DB.getContacts(currentUser.id);
     const el = document.getElementById('online-list');
-    if (!contacts.length) { el.innerHTML = '<p class="empty-msg">Add contacts to see who\'s online</p>'; return; }
-    el.innerHTML = contacts.map(c => `
+    if (!contactsCache.length) {
+      el.innerHTML = '<p class="empty-msg">Add contacts to see who\'s online</p>';
+      return;
+    }
+    el.innerHTML = contactsCache.map(c => `
       <div class="online-card">
         <div class="avatar ${avatarClass(c.avatarIdx)}">${initials(c.name)}</div>
         <div class="online-info">
           <div class="online-name">${c.name}</div>
-          <div class="online-handle">@${c.id}</div>
+          <div class="online-handle">@${c.username}</div>
         </div>
         <div class="online-battery">
-          ${c.online ? `<div class="status-dot" title="Online"></div>` : ''}
-          <div class="mini-shell" style="border-color:${batteryColor(c.battery)}">
-            <div class="mini-fill" style="height:${(c.battery/100*28).toFixed(0)}px;background:${batteryColor(c.battery)}"></div>
+          ${c.online ? '<div class="status-dot" title="Online"></div>' : ''}
+          <div class="mini-shell" style="border-color:${batteryColor(c.battery||0)}">
+            <div class="mini-fill" style="height:${((c.battery||0)/100*28).toFixed(0)}px;background:${batteryColor(c.battery||0)}"></div>
           </div>
-          <span class="mini-pct">${Math.round(c.battery)}%</span>
+          <span class="mini-pct">${Math.round(c.battery||0)}%</span>
         </div>
       </div>
     `).join('');
   }
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
+     SEND CHARGE  (atomic transaction)
+  ════════════════════════════════ */
+  async function sendCharge() {
+    const toUid  = document.getElementById('send-to').value;
+    const amount = parseInt(document.getElementById('send-slider').value);
+    if (!toUid) { toast('Pick a contact first'); return; }
+
+    const prevBattery = currentUser.battery;
+    const overhead    = +(amount * 0.02).toFixed(1);
+    const received    = +(amount - overhead).toFixed(1);
+    let senderAfter, toName;
+
+    try {
+      // ① Atomic deduction from sender
+      const txResult = await rtdb.ref('users/' + currentUser.uid).transaction(sender => {
+        if (sender === null) return sender;
+        if ((sender.battery || 0) < amount + 5) return; // abort → committed = false
+        sender.battery    = Math.max(0, +((sender.battery || 0) - amount).toFixed(1));
+        sender.totalGiven = +((sender.totalGiven || 0) + amount).toFixed(1);
+        senderAfter       = sender.battery;
+        return sender;
+      });
+
+      if (!txResult.committed) {
+        toast('⚠ Not enough battery (keep at least 5%)');
+        return;
+      }
+
+      // ② Credit receiver
+      await rtdb.ref('users/' + toUid).transaction(receiver => {
+        if (receiver === null) return receiver;
+        receiver.battery       = Math.min(100, +((receiver.battery || 0) + received).toFixed(1));
+        receiver.totalReceived = +((receiver.totalReceived || 0) + received).toFixed(1);
+        return receiver;
+      });
+
+      // ③ Log transfer
+      const toSnap = await rtdb.ref('users/' + toUid).get();
+      const toUser = toSnap.val() || {};
+      toName = toUser.name || 'Unknown';
+      await rtdb.ref('transfers').push({
+        from: currentUser.uid, fromName: currentUser.name,
+        fromUsername: currentUser.username, fromAvatarIdx: currentUser.avatarIdx || 0,
+        to: toUid, toName: toUser.name || '',
+        toUsername: toUser.username || '', toAvatarIdx: toUser.avatarIdx || 0,
+        amount, received, ts: Date.now(),
+      });
+
+      flashShell();
+      toast('⚡ Sent ' + amount + '% → ' + toName + '  (you: ' + prevBattery + '% → ' + senderAfter + '%)');
+    } catch(e) {
+      toast('⚠ ' + e.message);
+    }
+  }
+
+  /* ════════════════════════════════
      CONTACTS
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
   function renderContacts() {
-    const contacts = DB.getContacts(currentUser.id);
     const el = document.getElementById('contacts-list');
-    if (!contacts.length) {
+    if (!contactsCache.length) {
       el.innerHTML = '<p class="empty-msg">No contacts yet — search above to add someone</p>';
       return;
     }
-    el.innerHTML = contacts.map(c => `
+    el.innerHTML = contactsCache.map(c => `
       <div class="contact-card">
         <div class="avatar ${avatarClass(c.avatarIdx)}">${initials(c.name)}</div>
         <div class="contact-info">
           <div class="contact-name">${c.name}</div>
-          <div class="contact-handle">@${c.id} · ${Math.round(c.battery)}%</div>
+          <div class="contact-handle">@${c.username} · ${Math.round(c.battery||0)}%</div>
         </div>
         <span class="contact-status ${c.online ? 'online' : ''}">${c.online ? '● online' : '○ offline'}</span>
         <div class="contact-actions">
-          <button class="btn-sm" onclick="App.openSendToContact('${c.id}')">Send ⚡</button>
-          <button class="btn-sm" onclick="App.openRequestFrom('${c.id}')">Request</button>
+          <button class="btn-sm" onclick="App.openSendToContact('${c.uid}')">Send ⚡</button>
+          <button class="btn-sm" onclick="App.openRequestFrom('${c.uid}')">Request</button>
         </div>
       </div>
     `).join('');
@@ -1657,66 +1608,282 @@ const App = (() => {
     document.getElementById('contact-search').focus();
   }
 
-  function searchUsers(query) {
-    const resultsEl = document.getElementById('search-results');
-    if (!query || query.length < 2) { resultsEl.innerHTML = ''; return; }
-    const results = DB.searchUsers(query, currentUser.id);
-    if (!results.length) {
-      resultsEl.innerHTML = `
-        <div class="search-result-item" style="flex-direction:column;align-items:flex-start;gap:10px;">
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span style="font-size:18px;">🔍</span>
-            <div>
-              <div style="font-size:13px;font-weight:600;color:var(--text);">No account found for "<em>${query}</em>"</div>
-              <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-top:2px;">They need a BatteryShare account to receive charge</div>
-            </div>
-          </div>
-          <button class="btn-primary" style="width:100%;margin-top:0;" onclick="App.openInviteModal('${query.replace(/'/g,"\\'")}')">
-            📨 Invite them to join BatteryShare →
-          </button>
-        </div>
-      `;
+  async function searchUsers(query) {
+    const el = document.getElementById('search-results');
+    if (!query || query.length < 2) { el.innerHTML = ''; return; }
+    const q = query.toLowerCase().trim();
+
+    const snap = await rtdb.ref('usernames').get();
+    if (!snap.exists()) { el.innerHTML = ''; return; }
+
+    const matchedUids = [];
+    snap.forEach(child => {
+      if (child.key.includes(q) && child.val() !== currentUser.uid) {
+        matchedUids.push(child.val());
+      }
+    });
+
+    if (!matchedUids.length) {
+      el.innerHTML = '<div style="padding:10px 14px;font-family:var(--font-m);font-size:12px;color:var(--text3)">No users found</div>';
       return;
     }
-    resultsEl.innerHTML = results.map(u => {
-      const isContact = DB.getContacts(currentUser.id).some(c => c.id === u.id);
-      return `
-        <div class="search-result-item">
-          <div style="display:flex;align-items:center;gap:10px;">
-            <div class="avatar ${avatarClass(u.avatarIdx)}" style="width:28px;height:28px;font-size:11px;">${initials(u.name)}</div>
-            <div>
-              <div style="font-size:13px;font-weight:600;">${u.name}</div>
-              <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);">@${u.id} · ${Math.round(u.battery)}%</div>
+
+    const profiles = await Promise.all(matchedUids.slice(0,6).map(uid => rtdb.ref('users/' + uid).get()));
+    const users    = profiles.filter(s => s.exists()).map(s => ({ uid: s.key, ...s.val() }));
+    const mySet    = new Set(contactsCache.map(c => c.uid));
+
+    el.innerHTML = users.map(u => `
+      <div class="search-result-item">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="avatar ${avatarClass(u.avatarIdx)}" style="width:30px;height:30px;font-size:11px;">${initials(u.name)}</div>
+          <div>
+            <div style="font-size:13px;font-weight:600;">${u.name}</div>
+            <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);">@${u.username}</div>
+          </div>
+        </div>
+        ${mySet.has(u.uid)
+          ? '<span style="font-family:var(--font-m);font-size:11px;color:var(--text3)">contact</span>'
+          : '<button class="btn-sm" style="font-size:12px;padding:5px 10px;" onclick="App.addContact(\'' + u.uid + '\')">+ Add</button>'
+        }
+      </div>
+    `).join('');
+  }
+
+  async function addContact(toUid) {
+    const existing = contactReqCache.outgoing.find(r => r.to === toUid);
+    if (existing) { toast('Request already sent'); return; }
+
+    const toSnap = await rtdb.ref('users/' + toUid).get();
+    if (!toSnap.exists()) { toast('User not found'); return; }
+    const toUser = toSnap.val();
+
+    await rtdb.ref('contactRequests').push({
+      from: currentUser.uid, fromName: currentUser.name,
+      fromUsername: currentUser.username, fromAvatarIdx: currentUser.avatarIdx || 0,
+      to: toUid, toName: toUser.name,
+      toUsername: toUser.username, toAvatarIdx: toUser.avatarIdx || 0,
+      status: 'pending', ts: Date.now(),
+    });
+    toast('Contact request sent!');
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('contact-search').value = '';
+  }
+
+  /* ════════════════════════════════
+     REQUESTS
+  ════════════════════════════════ */
+  function renderRequests() {
+    renderIncoming();
+    renderOutgoing();
+  }
+
+  function renderIncoming() {
+    const el = document.getElementById('incoming-requests');
+    const all = [
+      ...contactReqCache.incoming.map(r => ({ ...r, kind: 'contact' })),
+      ...chargeReqCache.incoming.map(r => ({ ...r, kind: 'charge' })),
+    ];
+    if (!all.length) { el.innerHTML = '<p class="empty-msg">No incoming requests</p>'; return; }
+    el.innerHTML = all.map(r => {
+      if (r.kind === 'contact') return `
+        <div class="request-card">
+          <div class="request-top">
+            <div class="avatar ${avatarClass(r.fromAvatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(r.fromName)}</div>
+            <div class="request-info">
+              <div class="request-name">${r.fromName}</div>
+              <div class="request-meta">wants to add you as a contact · ${timeAgo(r.ts)}</div>
             </div>
           </div>
-          ${isContact
-            ? `<span style="font-family:var(--font-m);font-size:11px;color:var(--accent);">✓ Contact</span>`
-            : `<button class="btn-sm" onclick="App.addContact('${u.id}')">+ Add</button>`
-          }
-        </div>
-      `;
+          <div class="request-actions">
+            <button class="btn-success" onclick="App.acceptContact('${r.id}','${r.from}')">✓ Accept</button>
+            <button class="btn-danger"  onclick="App.declineContact('${r.id}')">✕ Decline</button>
+          </div>
+        </div>`;
+      return `
+        <div class="request-card">
+          <div class="request-top">
+            <div class="avatar ${avatarClass(r.fromAvatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(r.fromName)}</div>
+            <div class="request-info">
+              <div class="request-name">${r.fromName}</div>
+              <div class="request-meta">requesting ${r.amount}% charge · ${timeAgo(r.ts)}</div>
+            </div>
+            <div class="request-amount">${r.amount}%</div>
+          </div>
+          <div class="request-actions">
+            <button class="btn-success" onclick="App.acceptCharge('${r.id}','${r.from}',${r.amount})">⚡ Send it</button>
+            <button class="btn-danger"  onclick="App.declineCharge('${r.id}')">✕ Decline</button>
+          </div>
+        </div>`;
     }).join('');
   }
 
-  function openInviteModal(nameHint) {
-    const appUrl = window.location.href.split('?')[0];
-    const inviteMsg = `Hey${nameHint ? ' ' + nameHint : ''}! I'm using BatteryShare to transfer phone battery % between friends. Join me so I can send you some charge 🔋⚡\n\nSign up here: ${appUrl}`;
+  function renderOutgoing() {
+    const el = document.getElementById('outgoing-requests');
+    const all = [
+      ...contactReqCache.outgoing.map(r => ({ ...r, kind: 'contact' })),
+      ...chargeReqCache.outgoing.map(r => ({ ...r, kind: 'charge' })),
+    ];
+    if (!all.length) { el.innerHTML = '<p class="empty-msg">No outgoing requests</p>'; return; }
+    el.innerHTML = all.map(r => `
+      <div class="request-card">
+        <div class="request-top">
+          <div class="avatar ${avatarClass(r.toAvatarIdx||0)}" style="width:36px;height:36px;font-size:13px;">${initials(r.toName||'?')}</div>
+          <div class="request-info">
+            <div class="request-name">${r.toName||'Unknown'}</div>
+            <div class="request-meta">${r.kind === 'contact' ? 'Contact request' : 'Charge request (' + r.amount + '%)'} · ${timeAgo(r.ts)} · pending</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  async function acceptContact(reqId, fromUid) {
+    await rtdb.ref('contacts/' + currentUser.uid + '/' + fromUid).set(true);
+    await rtdb.ref('contacts/' + fromUid + '/' + currentUser.uid).set(true);
+    await rtdb.ref('contactRequests/' + reqId + '/status').set('accepted');
+    toast('✓ Contact added!');
+  }
+
+  async function declineContact(reqId) {
+    await rtdb.ref('contactRequests/' + reqId + '/status').set('declined');
+  }
+
+  async function acceptCharge(reqId, fromUid, amount) {
+    // currentUser = provider (acceptor); fromUid = requester
+    const prevBattery = currentUser.battery;
+    const overhead    = +(amount * 0.02).toFixed(1);
+    const received    = +(amount - overhead).toFixed(1);
+    let providerAfter;
+
+    try {
+      // ① Deduct from provider (current user)
+      const txResult = await rtdb.ref('users/' + currentUser.uid).transaction(provider => {
+        if (provider === null) return provider;
+        if ((provider.battery || 0) < amount + 5) return; // abort
+        provider.battery    = Math.max(0, +((provider.battery || 0) - amount).toFixed(1));
+        provider.totalGiven = +((provider.totalGiven || 0) + amount).toFixed(1);
+        providerAfter       = provider.battery;
+        return provider;
+      });
+
+      if (!txResult.committed) { toast('⚠ Not enough battery (keep at least 5%)'); return; }
+
+      // ② Credit requester
+      await rtdb.ref('users/' + fromUid).transaction(requester => {
+        if (requester === null) return requester;
+        requester.battery       = Math.min(100, +((requester.battery || 0) + received).toFixed(1));
+        requester.totalReceived = +((requester.totalReceived || 0) + received).toFixed(1);
+        return requester;
+      });
+
+      // ③ Log transfer
+      const fromSnap = await rtdb.ref('users/' + fromUid).get();
+      const fromUser = fromSnap.val() || {};
+      await rtdb.ref('transfers').push({
+        from: currentUser.uid, fromName: currentUser.name,
+        fromUsername: currentUser.username, fromAvatarIdx: currentUser.avatarIdx || 0,
+        to: fromUid, toName: fromUser.name || '',
+        toUsername: fromUser.username || '', toAvatarIdx: fromUser.avatarIdx || 0,
+        amount, received, ts: Date.now(),
+      });
+
+      // ④ Mark request accepted
+      await rtdb.ref('chargeRequests/' + reqId + '/status').set('accepted');
+
+      flashShell();
+      toast('⚡ Charge sent!  (you: ' + prevBattery + '% → ' + providerAfter + '%)');
+    } catch(e) {
+      toast('⚠ ' + e.message);
+    }
+  }
+
+  async function declineCharge(reqId) {
+    await rtdb.ref('chargeRequests/' + reqId + '/status').set('declined');
+  }
+
+  /* ════════════════════════════════
+     HISTORY
+  ════════════════════════════════ */
+  function renderHistory() {
+    const el = document.getElementById('history-list');
+    if (!transfersCache.length) {
+      el.innerHTML = '<p class="empty-msg">No transfers yet</p>';
+      return;
+    }
+    el.innerHTML = transfersCache.map(t => {
+      const isSent    = t.from === currentUser.uid;
+      const otherName = isSent ? t.toName   : t.fromName;
+      const otherAv   = isSent ? (t.toAvatarIdx || 0) : (t.fromAvatarIdx || 0);
+      return `
+        <div class="history-item">
+          <div class="history-left">
+            <div class="avatar ${avatarClass(otherAv)}" style="width:32px;height:32px;font-size:11px;flex-shrink:0;">${initials(otherName||'?')}</div>
+            <div>
+              <div class="history-who">${isSent ? '→ ' : '← '}${otherName||'Unknown'}</div>
+              <div class="history-time">${timeAgo(t.ts)}</div>
+            </div>
+          </div>
+          <div class="history-amt ${isSent ? 'sent' : 'received'}">${isSent ? '−' : '+'}${isSent ? t.amount : t.received}%</div>
+        </div>`;
+    }).join('');
+  }
+
+  /* ════════════════════════════════
+     SHORTCUTS / MODALS
+  ════════════════════════════════ */
+  function openSendToContact(contactUid) {
+    const sel = document.getElementById('send-to');
+    sel.value = contactUid;
+    setTab('home');
+    updateSendNote();
+    document.getElementById('send-slider').focus();
+  }
+
+  async function openRequestFrom(contactUid) {
+    const contact = contactsCache.find(c => c.uid === contactUid);
+    if (!contact) return;
     openModal(`
-      <h3>📨 Invite to BatteryShare</h3>
-      <p style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1.25rem;line-height:1.6;">
-        This person doesn't have an account yet. Share the invite below — once they sign up, you'll be able to send them charge.
-      </p>
-      <div style="background:var(--surf2);border:0.5px solid var(--border2);border-radius:var(--rad-sm);padding:12px;margin-bottom:1rem;">
-        <div style="font-family:var(--font-m);font-size:12px;color:var(--text);line-height:1.7;white-space:pre-wrap;" id="invite-text">${inviteMsg}</div>
+      <h3>Request charge</h3>
+      <p style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1.25rem;">Ask ${contact.name} to send you battery</p>
+      <div class="field">
+        <label class="field-label">Amount to request <span id="req-amount-disp" style="color:var(--accent)">10%</span></label>
+        <input type="range" min="1" max="40" value="10" step="1" id="req-slider"
+          oninput="document.getElementById('req-amount-disp').textContent=this.value+'%'"/>
       </div>
-      <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-bottom:1rem;">
-        Share via WhatsApp, SMS, or copy the message above
+      <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-bottom:1rem;">They'll get a notification to accept or decline</div>
+      <div class="modal-actions">
+        <button class="btn-sm" onclick="App.closeModal()">Cancel</button>
+        <button class="btn-primary" onclick="App.submitChargeRequest('${contactUid}')">Send request →</button>
       </div>
-      <div class="modal-actions" style="flex-wrap:wrap;gap:8px;">
-        <button class="btn-sm" onclick="App.copyInvite()">📋 Copy message</button>
-        <button class="btn-sm" onclick="App.shareViaWhatsApp('${encodeURIComponent(inviteMsg)}')">WhatsApp</button>
-        <button class="btn-sm" onclick="App.shareViaSMS('${encodeURIComponent(inviteMsg)}')">SMS</button>
-        <button class="btn-primary" style="flex:1;min-width:120px;" onclick="App.closeModal()">Done</button>
+    `);
+  }
+
+  async function submitChargeRequest(toUid) {
+    const amount = parseInt(document.getElementById('req-slider').value);
+    const toSnap = await rtdb.ref('users/' + toUid).get();
+    const toUser = toSnap.val() || {};
+    await rtdb.ref('chargeRequests').push({
+      from: currentUser.uid, fromName: currentUser.name,
+      fromUsername: currentUser.username, fromAvatarIdx: currentUser.avatarIdx || 0,
+      to: toUid, toName: toUser.name || '',
+      toUsername: toUser.username || '', toAvatarIdx: toUser.avatarIdx || 0,
+      amount, status: 'pending', ts: Date.now(),
+    });
+    closeModal();
+    toast('Request sent to ' + (toUser.name || 'them') + '!');
+  }
+
+  function openInviteModal() {
+    const msg = 'Hey! I\'m using BatteryShare to share phone battery with contacts. Join me → https://batteryshare.web.app';
+    openModal(`
+      <h3>Invite someone</h3>
+      <p style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1rem;">Share BatteryShare with a friend</p>
+      <div style="background:var(--surf2);border:0.5px solid var(--border2);border-radius:var(--rad-sm);padding:12px;font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1rem;line-height:1.6;" id="invite-text">${msg}</div>
+      <div class="modal-actions" style="flex-wrap:wrap;">
+        <button class="btn-sm" onclick="App.copyInvite()">📋 Copy</button>
+        <button class="btn-sm" onclick="App.shareViaWhatsApp('${encodeURIComponent(msg)}')">WhatsApp</button>
+        <button class="btn-sm" onclick="App.shareViaSMS('${encodeURIComponent(msg)}')">SMS</button>
+        <button class="btn-primary" style="flex:1;min-width:100px;" onclick="App.closeModal()">Done</button>
       </div>
       <div id="invite-copied" style="font-family:var(--font-m);font-size:11px;color:var(--accent);margin-top:8px;min-height:16px;"></div>
     `);
@@ -1726,261 +1893,72 @@ const App = (() => {
     const text = document.getElementById('invite-text')?.textContent || '';
     navigator.clipboard.writeText(text).then(() => {
       const el = document.getElementById('invite-copied');
-      if (el) { el.textContent = '✓ Copied to clipboard!'; setTimeout(() => { if(el) el.textContent = ''; }, 2500); }
+      if (el) { el.textContent = '✓ Copied!'; setTimeout(() => { if(el) el.textContent=''; }, 2500); }
     }).catch(() => {
-      // fallback for browsers without clipboard API
       const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      ta.value = text; ta.style.position='fixed'; ta.style.opacity='0';
       document.body.appendChild(ta); ta.select(); document.execCommand('copy');
       document.body.removeChild(ta);
-      const el = document.getElementById('invite-copied');
-      if (el) { el.textContent = '✓ Copied!'; setTimeout(() => { if(el) el.textContent = ''; }, 2500); }
     });
   }
 
-  function shareViaWhatsApp(encodedMsg) {
-    window.open('https://wa.me/?text=' + encodedMsg, '_blank');
-  }
+  function shareViaWhatsApp(enc) { window.open('https://wa.me/?text=' + enc, '_blank'); }
+  function shareViaSMS(enc)       { window.open('sms:?body=' + enc, '_blank'); }
 
-  function shareViaSMS(encodedMsg) {
-    window.open('sms:?body=' + encodedMsg, '_blank');
-  }
-
-  function addContact(toId) {
-    const res = DB.sendContactRequest(currentUser.id, toId);
-    if (!res.ok) { toast('⚠ ' + res.error); return; }
-    toast('Contact request sent!');
-    document.getElementById('search-results').innerHTML = '';
-    document.getElementById('contact-search').value = '';
-    renderContacts();
-    updateBadges();
-  }
-
-  /* ══════════════════════════════════
-     SEND / REQUEST MODALS
-  ══════════════════════════════════ */
-  function openSendToContact(contactId) {
-    const sel = document.getElementById('send-to');
-    sel.value = contactId;
-    setTab('home');
-    updateSendNote();
-    document.getElementById('send-slider').focus();
-  }
-
-  function openRequestFrom(contactId) {
-    const contact = DB.getUser(contactId);
-    if (!contact) return;
-    openModal(`
-      <h3>Request charge</h3>
-      <p style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1.25rem;">
-        Ask ${contact.name} to send you battery
-      </p>
-      <div class="field">
-        <label class="field-label">Amount to request <span id="req-amount-disp" style="color:var(--accent)">10%</span></label>
-        <input type="range" min="1" max="40" value="10" step="1" id="req-slider"
-          oninput="document.getElementById('req-amount-disp').textContent=this.value+'%'"/>
-      </div>
-      <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-bottom:1rem;">
-        They'll get a notification to accept or decline
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm" onclick="App.closeModal()">Cancel</button>
-        <button class="btn-primary" onclick="App.submitChargeRequest('${contactId}')">Send request →</button>
-      </div>
-    `);
-  }
-
-  function submitChargeRequest(toId) {
-    const amount = parseInt(document.getElementById('req-slider').value);
-    DB.sendChargeRequest(currentUser.id, toId, amount);
-    closeModal();
-    toast(`Request sent to ${DB.getUser(toId).name}!`);
-    updateBadges();
-  }
-
-  /* ══════════════════════════════════
-     REQUESTS
-  ══════════════════════════════════ */
-  function renderRequests() {
-    const { incoming: contactIn, outgoing: contactOut } = DB.getContactRequests(currentUser.id);
-    const { incoming: chargeIn,  outgoing: chargeOut  } = DB.getChargeRequests(currentUser.id);
-    const allIncoming = [
-      ...contactIn.map(r => ({ ...r, kind: 'contact' })),
-      ...chargeIn.map(r => ({ ...r, kind: 'charge' })),
-    ];
-    const allOutgoing = [
-      ...contactOut.map(r => ({ ...r, kind: 'contact' })),
-      ...chargeOut.map(r => ({ ...r, kind: 'charge' })),
-    ];
-
-    renderIncoming(allIncoming);
-    renderOutgoing(allOutgoing);
-  }
-
-  function renderIncoming(items) {
-    const el = document.getElementById('incoming-requests');
-    if (!items.length) { el.innerHTML = '<p class="empty-msg">No incoming requests</p>'; return; }
-    el.innerHTML = items.map(r => {
-      const user = r.fromUser;
-      if (r.kind === 'contact') return `
-        <div class="request-card">
-          <div class="request-top">
-            <div class="avatar ${avatarClass(user.avatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(user.name)}</div>
-            <div class="request-info">
-              <div class="request-name">${user.name}</div>
-              <div class="request-meta">wants to add you as a contact · ${timeAgo(r.ts)}</div>
-            </div>
-          </div>
-          <div class="request-actions">
-            <button class="btn-success" onclick="App.acceptContact('${r.id}')">✓ Accept</button>
-            <button class="btn-danger"  onclick="App.declineContact('${r.id}')">✕ Decline</button>
-          </div>
-        </div>
-      `;
-      return `
-        <div class="request-card">
-          <div class="request-top">
-            <div class="avatar ${avatarClass(user.avatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(user.name)}</div>
-            <div class="request-info">
-              <div class="request-name">${user.name}</div>
-              <div class="request-meta">requesting charge · ${timeAgo(r.ts)}</div>
-            </div>
-            <div class="request-amount">${r.amount}%</div>
-          </div>
-          <div class="request-actions">
-            <button class="btn-success" onclick="App.acceptCharge('${r.id}')">⚡ Send it</button>
-            <button class="btn-danger"  onclick="App.declineCharge('${r.id}')">✕ Decline</button>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  function renderOutgoing(items) {
-    const el = document.getElementById('outgoing-requests');
-    if (!items.length) { el.innerHTML = '<p class="empty-msg">No outgoing requests</p>'; return; }
-    el.innerHTML = items.map(r => {
-      const user = r.toUser;
-      const label = r.kind === 'contact' ? 'Contact request' : `Charge request (${r.amount}%)`;
-      return `
-        <div class="request-card">
-          <div class="request-top">
-            <div class="avatar ${avatarClass(user.avatarIdx)}" style="width:36px;height:36px;font-size:13px;">${initials(user.name)}</div>
-            <div class="request-info">
-              <div class="request-name">${user.name}</div>
-              <div class="request-meta">${label} · ${timeAgo(r.ts)} · pending</div>
-            </div>
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  function acceptContact(reqId) {
-    DB.respondContactRequest(reqId, true);
-    toast('✓ Contact added!');
-    renderAll();
-  }
-
-  function declineContact(reqId) {
-    DB.respondContactRequest(reqId, false);
-    renderRequests();
-    updateBadges();
-  }
-
-  function acceptCharge(reqId) {
-    const prevBattery = currentUser.battery;
-    const res = DB.respondChargeRequest(reqId, true, currentUser.id);
-    if (!res.ok) { toast('⚠ ' + (res.error || 'Failed')); return; }
-    currentUser = DB.refreshUser(currentUser.id);
-    // Flash the header battery shell to highlight the change
-    const shell = document.getElementById('hb-shell');
-    if (shell) {
-      shell.style.transition = 'box-shadow 0.15s ease';
-      shell.style.boxShadow = '0 0 0 2px var(--danger)';
-      setTimeout(() => { shell.style.boxShadow = ''; }, 600);
-    }
-    toast(`⚡ Charge sent!  (you: ${prevBattery}% → ${currentUser.battery}%)`);
-    renderAll();
-  }
-
-  function declineCharge(reqId) {
-    DB.respondChargeRequest(reqId, false, currentUser.id);
-    renderRequests();
-    updateBadges();
-  }
-
-  /* ══════════════════════════════════
-     HISTORY
-  ══════════════════════════════════ */
-  function renderHistory() {
-    const transfers = DB.getTransfers(currentUser.id);
-    const el = document.getElementById('history-list');
-    if (!transfers.length) { el.innerHTML = '<p class="empty-msg">No transfers yet</p>'; return; }
-    el.innerHTML = transfers.map(t => {
-      const isSent = t.from === currentUser.id;
-      const other  = isSent ? t.toUser : t.fromUser;
-      return `
-        <div class="history-item">
-          <div class="history-left">
-            <div class="avatar ${avatarClass(other?.avatarIdx)} history-dir" style="width:32px;height:32px;font-size:11px;flex-shrink:0;">
-              ${initials(other?.name || '?')}
-            </div>
-            <div>
-              <div class="history-who">${isSent ? '→ ' : '← '}${other?.name || 'Unknown'}</div>
-              <div class="history-time">${timeAgo(t.ts)}</div>
-            </div>
-          </div>
-          <div class="history-amt ${isSent ? 'sent' : 'received'}">
-            ${isSent ? '−' : '+'}${isSent ? t.amount : t.received}%
-          </div>
-        </div>
-      `;
-    }).join('');
-  }
-
-  /* ══════════════════════════════════
-     MODAL
-  ══════════════════════════════════ */
   function openModal(html) {
     document.getElementById('modal-content').innerHTML = html;
     document.getElementById('modal-overlay').classList.remove('hidden');
   }
-
   function closeModal() {
     document.getElementById('modal-overlay').classList.add('hidden');
   }
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
      EVENT WIRING
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
   document.addEventListener('keydown', e => {
-    if (e.key === 'Enter' && document.getElementById('form-login').classList.contains('hidden') === false) login();
     if (e.key === 'Escape') closeModal();
+    if (e.key === 'Enter' && !document.getElementById('form-login').classList.contains('hidden')) login();
   });
-
   document.getElementById('send-slider').addEventListener('input', updateSendNote);
   document.getElementById('send-to').addEventListener('change', updateSendNote);
 
-  /* ══════════════════════════════════
+  /* ════════════════════════════════
+     FIREBASE AUTH STATE OBSERVER
+     Restores session on page reload
+  ════════════════════════════════ */
+  fbAuth.onAuthStateChanged(async user => {
+    if (user) {
+      const snap = await rtdb.ref('users/' + user.uid).get();
+      if (snap.exists()) {
+        currentUser = { uid: user.uid, ...snap.val() };
+        await rtdb.ref('users/' + user.uid + '/online').set(true);
+        hideLoading();
+        enterApp();
+        return;
+      }
+    }
+    hideLoading();
+    showScreen('screen-auth');
+  });
+
+  /* ════════════════════════════════
      PUBLIC API
-  ══════════════════════════════════ */
+  ════════════════════════════════ */
   return {
-    login, demoLogin, register, logout,
+    login, register, demoLogin, logout,
     showLogin, showRegister,
     setTab,
     sendCharge,
     openAddContact, searchUsers, addContact,
     openSendToContact, openRequestFrom, submitChargeRequest,
     acceptContact, declineContact, acceptCharge, declineCharge,
-    openModal, closeModal,
     openInviteModal, copyInvite, shareViaWhatsApp, shareViaSMS,
-    renderAll,
+    openModal, closeModal,
     toggleTheme,
   };
 
 })();
-
 </script>
 </body>
 </html>
