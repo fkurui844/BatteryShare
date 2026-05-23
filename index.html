@@ -543,6 +543,102 @@ input[type=password]:focus,
   margin-bottom: 10px;
 }
 
+/* ── Contact Picker ── */
+.contact-picker { position: relative; }
+
+.cp-selected {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--surf2);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--rad-sm);
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: border-color var(--trans);
+  min-height: 40px;
+}
+.cp-selected:hover { border-color: var(--accent); }
+.cp-selected.open  { border-color: var(--accent); border-radius: var(--rad-sm) var(--rad-sm) 0 0; }
+
+.cp-arrow { font-size: 11px; color: var(--text3); transition: transform 0.2s; }
+.cp-selected.open .cp-arrow { transform: rotate(180deg); }
+
+.cp-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0; right: 0;
+  background: var(--surf);
+  border: 0.5px solid var(--accent);
+  border-top: none;
+  border-radius: 0 0 var(--rad-sm) var(--rad-sm);
+  z-index: 50;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+  overflow: hidden;
+}
+
+.cp-search-wrap { padding: 8px; border-bottom: 0.5px solid var(--border); }
+.cp-search-wrap input {
+  width: 100%;
+  background: var(--surf2);
+  border: 0.5px solid var(--border2);
+  border-radius: var(--rad-sm);
+  color: var(--text);
+  font-family: var(--font-m);
+  font-size: 12px;
+  padding: 7px 10px;
+  outline: none;
+}
+.cp-search-wrap input:focus { border-color: var(--accent); }
+
+.cp-list { max-height: 200px; overflow-y: auto; }
+
+.cp-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  cursor: pointer;
+  transition: background var(--trans);
+  border-bottom: 0.5px solid var(--border);
+}
+.cp-item:last-child { border-bottom: none; }
+.cp-item:hover  { background: var(--surf2); }
+.cp-item.active { background: var(--accent-bg); }
+
+.cp-item-info  { flex: 1; min-width: 0; }
+.cp-item-name  { font-size: 13px; font-weight: 600; }
+.cp-item-sub   { font-family: var(--font-m); font-size: 11px; color: var(--text2); }
+
+.cp-item-bat {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-m);
+  font-size: 12px;
+}
+
+.cp-empty {
+  padding: 14px 12px;
+  font-family: var(--font-m);
+  font-size: 12px;
+  color: var(--text3);
+  text-align: center;
+}
+
+.cp-invite-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+  border-top: 0.5px solid var(--border2);
+  background: var(--surf2);
+  transition: background var(--trans);
+}
+.cp-invite-row:hover { background: var(--surf3); }
+
 /* ── Send panel ── */
 .send-panel {
   background: var(--surf);
@@ -1116,18 +1212,31 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
 
       <div class="section-title">Send charge</div>
       <div class="send-panel">
-        <div style="display:flex;align-items:center;gap:8px;background:var(--accent-bg);border:0.5px solid rgba(182,255,106,0.2);border-radius:var(--rad-sm);padding:8px 12px;margin-bottom:1rem;">
-          <span style="font-size:14px;">🔒</span>
-          <span style="font-family:var(--font-m);font-size:11px;color:var(--text2);line-height:1.5;">
-            Transfers only work between registered BatteryShare accounts.
-            <a onclick="App.setTab('contacts')" style="color:var(--accent);cursor:pointer;text-decoration:underline;">Invite someone</a> who doesn't have one yet.
-          </span>
-        </div>
         <div class="send-to-row">
           <label class="field-label">To</label>
-          <select id="send-to" class="select-field">
-            <option value="">— pick a contact —</option>
-          </select>
+          <!-- Rich contact picker -->
+          <div class="contact-picker" id="contact-picker">
+            <div class="cp-selected" id="cp-selected" onclick="App.togglePicker()">
+              <span id="cp-label" style="color:var(--text3);">— pick a contact —</span>
+              <span class="cp-arrow">▾</span>
+            </div>
+            <div class="cp-dropdown hidden" id="cp-dropdown">
+              <div class="cp-search-wrap">
+                <input type="text" id="cp-search" placeholder="Search contacts…"
+                  oninput="App.filterPicker(this.value)" autocomplete="off"/>
+              </div>
+              <div class="cp-list" id="cp-list"></div>
+              <div class="cp-invite-row" onclick="App.openInviteModal()">
+                <span style="font-size:15px;">📨</span>
+                <div>
+                  <div style="font-size:13px;font-weight:600;">Invite someone</div>
+                  <div style="font-family:var(--font-m);font-size:11px;color:var(--text2);">Not on BatteryShare yet? Send them a link</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <!-- hidden real value for JS -->
+          <input type="hidden" id="send-to"/>
         </div>
         <div class="send-amount-row">
           <label class="field-label">Amount <span id="send-amount-val" class="accent">10%</span></label>
@@ -1723,17 +1832,106 @@ const App = (() => {
     document.getElementById('stat-contacts').textContent = contactsCache.length;
   }
 
+  /* ════════════════════════════════
+     CONTACT PICKER
+  ════════════════════════════════ */
+  let _pickerOpen = false;
+  let _pickerSelected = null; // { uid, name, battery, avatarIdx }
+
+  function togglePicker() {
+    _pickerOpen ? closePicker() : openPicker();
+  }
+
+  function openPicker() {
+    _pickerOpen = true;
+    document.getElementById('cp-dropdown').classList.remove('hidden');
+    document.getElementById('cp-selected').classList.add('open');
+    document.getElementById('cp-search').value = '';
+    renderPickerList('');
+    setTimeout(() => document.getElementById('cp-search').focus(), 60);
+    document.addEventListener('click', pickerOutsideClick, true);
+  }
+
+  function closePicker() {
+    _pickerOpen = false;
+    document.getElementById('cp-dropdown').classList.add('hidden');
+    document.getElementById('cp-selected').classList.remove('open');
+    document.removeEventListener('click', pickerOutsideClick, true);
+  }
+
+  function pickerOutsideClick(e) {
+    if (!document.getElementById('contact-picker').contains(e.target)) closePicker();
+  }
+
+  function filterPicker(q) { renderPickerList(q); }
+
+  function renderPickerList(q) {
+    const el = document.getElementById('cp-list');
+    const query = (q || '').toLowerCase();
+    const filtered = contactsCache.filter(c =>
+      c.name.toLowerCase().includes(query) || c.username.toLowerCase().includes(query)
+    );
+
+    if (!filtered.length) {
+      el.innerHTML = `<div class="cp-empty">${
+        contactsCache.length === 0
+          ? 'No contacts yet — go to Contacts tab to add people'
+          : 'No contacts match "' + q + '"'
+      }</div>`;
+      return;
+    }
+
+    el.innerHTML = filtered.map(c => {
+      const bat   = Math.round(c.battery || 0);
+      const color = batteryColor(bat);
+      const isActive = _pickerSelected && _pickerSelected.uid === c.uid;
+      return `<div class="cp-item ${isActive ? 'active' : ''}" onclick="App.selectContact('${c.uid}')">
+        <div class="avatar ${avatarClass(c.avatarIdx)}" style="width:32px;height:32px;font-size:11px;flex-shrink:0;">${initials(c.name)}</div>
+        <div class="cp-item-info">
+          <div class="cp-item-name">${c.name}</div>
+          <div class="cp-item-sub">@${c.username} · ${c.online ? '● online' : '○ offline'}</div>
+        </div>
+        <div class="cp-item-bat" style="color:${color};">
+          <span>${bat}%</span>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function selectContact(uid) {
+    const c = contactsCache.find(x => x.uid === uid);
+    if (!c) return;
+    _pickerSelected = c;
+    document.getElementById('send-to').value = uid;
+    const bat   = Math.round(c.battery || 0);
+    const color = batteryColor(bat);
+    document.getElementById('cp-label').innerHTML =
+      `<div style="display:flex;align-items:center;gap:8px;">
+        <div class="avatar ${avatarClass(c.avatarIdx)}" style="width:26px;height:26px;font-size:10px;">${initials(c.name)}</div>
+        <div>
+          <span style="font-size:13px;font-weight:600;color:var(--text);">${c.name}</span>
+          <span style="font-family:var(--font-m);font-size:11px;color:var(--text2);margin-left:6px;">@${c.username}</span>
+        </div>
+        <span style="font-family:var(--font-m);font-size:12px;color:${color};margin-left:auto;">${bat}%</span>
+      </div>`;
+    closePicker();
+    updateSendNote();
+  }
+
   function updateSendPanel() {
-    const sel     = document.getElementById('send-to');
-    const current = sel.value;
-    sel.innerHTML = '<option value="">— pick a contact —</option>';
-    contactsCache.forEach(c => {
-      const opt = document.createElement('option');
-      opt.value = c.uid;
-      opt.textContent = c.name + ' (' + Math.round(c.battery || 0) + '%)';
-      if (c.uid === current) opt.selected = true;
-      sel.appendChild(opt);
-    });
+    // Refresh picker list if open, and re-render selected if still valid
+    if (_pickerSelected) {
+      const still = contactsCache.find(c => c.uid === _pickerSelected.uid);
+      if (still) {
+        _pickerSelected = still;
+        selectContact(still.uid); // re-renders label with fresh battery
+      } else {
+        _pickerSelected = null;
+        document.getElementById('send-to').value = '';
+        document.getElementById('cp-label').innerHTML = '<span style="color:var(--text3);">— pick a contact —</span>';
+      }
+    }
+    if (_pickerOpen) renderPickerList(document.getElementById('cp-search').value);
     updateSendNote();
   }
 
@@ -2086,10 +2284,8 @@ const App = (() => {
      SHORTCUTS / MODALS
   ════════════════════════════════ */
   function openSendToContact(contactUid) {
-    const sel = document.getElementById('send-to');
-    sel.value = contactUid;
     setTab('home');
-    updateSendNote();
+    setTimeout(() => selectContact(contactUid), 100);
     document.getElementById('send-slider').focus();
   }
 
@@ -2175,7 +2371,6 @@ const App = (() => {
     if (e.key === 'Enter' && !document.getElementById('form-login').classList.contains('hidden')) login();
   });
   document.getElementById('send-slider').addEventListener('input', updateSendNote);
-  document.getElementById('send-to').addEventListener('change', updateSendNote);
 
   /* ════════════════════════════════
      FIREBASE AUTH STATE OBSERVER
@@ -2206,6 +2401,7 @@ const App = (() => {
     regNextStep, regBackStep,
     setTab,
     sendCharge,
+    togglePicker, filterPicker, selectContact,
     openAddContact, searchUsers, addContact,
     openSendToContact, openRequestFrom, submitChargeRequest,
     acceptContact, declineContact, acceptCharge, declineCharge,
