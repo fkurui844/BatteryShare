@@ -312,6 +312,76 @@ input[type=password]:focus,
   flex-wrap: wrap;
 }
 
+/* ── Password field with toggle ── */
+.pw-wrap { position: relative; display: flex; align-items: center; }
+.pw-wrap input { flex: 1; padding-right: 38px; }
+.pw-eye {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 15px;
+  color: var(--text3);
+  padding: 0;
+  line-height: 1;
+  opacity: 0.6;
+  transition: opacity var(--trans);
+}
+.pw-eye:hover { opacity: 1; }
+
+/* ── Password strength bar ── */
+.pw-strength-bar {
+  height: 3px;
+  background: var(--surf3);
+  border-radius: 2px;
+  margin-top: 8px;
+  overflow: hidden;
+}
+.pw-strength-bar > div {
+  height: 100%;
+  border-radius: 2px;
+  width: 0%;
+  transition: width 0.3s ease, background 0.3s ease;
+}
+
+/* ── 2-step register indicator ── */
+.reg-steps {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin-bottom: 1.5rem;
+}
+.reg-step {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border2);
+  background: var(--surf2);
+  color: var(--text3);
+  font-family: var(--font-m);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: all 0.3s ease;
+}
+.reg-step.active { border-color: var(--accent); background: var(--accent-bg); color: var(--accent); }
+.reg-step.done   { border-color: var(--accent); background: var(--accent); color: #080808; }
+.reg-step-line {
+  flex: 1;
+  height: 1.5px;
+  background: var(--border2);
+  transition: background 0.3s ease;
+}
+
+/* ── Username status colours ── */
+.us-checking { color: var(--text3); }
+.us-taken    { color: var(--danger); }
+.us-free     { color: var(--accent); }
+
 .hidden { display: none !important; }
 
 /* ════════════════════════════════
@@ -887,48 +957,100 @@ input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.25); }
     </div>
 
     <div class="auth-card" id="auth-card">
+
       <!-- Login form -->
       <div class="auth-form" id="form-login">
-        <h2>Sign in</h2>
+        <h2>Welcome back</h2>
         <div class="field">
           <label>Username</label>
-          <input type="text" id="login-username" placeholder="your_handle" autocomplete="username"/>
+          <input type="text" id="login-username" placeholder="your_handle"
+            autocomplete="username" autocapitalize="none" spellcheck="false"
+            oninput="this.value=this.value.toLowerCase()"
+            onkeydown="if(event.key==='Enter')document.getElementById('login-password').focus()"/>
         </div>
         <div class="field">
           <label>Password</label>
-          <input type="password" id="login-password" placeholder="••••••••"/>
+          <div class="pw-wrap">
+            <input type="password" id="login-password" placeholder="••••••••"
+              autocomplete="current-password"
+              onkeydown="if(event.key==='Enter')App.login()"/>
+            <button class="pw-eye" type="button" onclick="App.togglePw('login-password',this)" tabindex="-1">👁</button>
+          </div>
         </div>
         <div class="field-error" id="login-error"></div>
-        <button class="btn-primary" onclick="App.login()">Sign in →</button>
-        <p class="auth-switch">No account? <a onclick="App.showRegister()">Create one</a></p>
-        <p class="auth-demo">— or try a demo account —</p>
+        <button class="btn-primary" id="login-btn" onclick="App.login()">Sign in →</button>
+        <p class="auth-switch">No account? <a onclick="App.showRegister()">Create one free</a></p>
+        <p class="auth-demo">— or jump in with a demo —</p>
         <div class="demo-chips">
-          <button class="chip" onclick="App.demoLogin('amani')">Amani</button>
-          <button class="chip" onclick="App.demoLogin('kofi')">Kofi</button>
-          <button class="chip" onclick="App.demoLogin('njeri')">Njeri</button>
-          <button class="chip" onclick="App.demoLogin('daudi')">Daudi</button>
+          <button class="chip" onclick="App.demoLogin('amani')">⚡ Amani</button>
+          <button class="chip" onclick="App.demoLogin('kofi')">⚡ Kofi</button>
+          <button class="chip" onclick="App.demoLogin('njeri')">⚡ Njeri</button>
+          <button class="chip" onclick="App.demoLogin('daudi')">⚡ Daudi</button>
         </div>
       </div>
 
       <!-- Register form -->
       <div class="auth-form hidden" id="form-register">
         <h2>Create account</h2>
-        <div class="field">
-          <label>Display name</label>
-          <input type="text" id="reg-name" placeholder="Amani Kamau"/>
+
+        <div class="reg-steps">
+          <div class="reg-step active" id="rstep-1">1</div>
+          <div class="reg-step-line"></div>
+          <div class="reg-step" id="rstep-2">2</div>
         </div>
-        <div class="field">
-          <label>Username</label>
-          <input type="text" id="reg-username" placeholder="amani_k"/>
+
+        <!-- Step 1 -->
+        <div id="reg-step1">
+          <div class="field">
+            <label>Your name</label>
+            <input type="text" id="reg-name" placeholder="e.g. Amani Kamau"
+              autocomplete="name"
+              oninput="App.onRegNameInput(this.value)"
+              onkeydown="if(event.key==='Enter')App.regNextStep()"/>
+          </div>
+          <div class="field">
+            <label style="display:flex;justify-content:space-between;">
+              Username
+              <span id="username-status" style="font-size:11px;"></span>
+            </label>
+            <input type="text" id="reg-username" placeholder="auto_generated"
+              autocapitalize="none" spellcheck="false"
+              oninput="App.onUsernameInput(this.value)"
+              onkeydown="if(event.key==='Enter')App.regNextStep()"/>
+            <div style="font-family:var(--font-m);font-size:10px;color:var(--text3);margin-top:4px;">Letters, numbers, underscores only</div>
+          </div>
+          <div class="field-error" id="reg-error-1"></div>
+          <button class="btn-primary" onclick="App.regNextStep()">Continue →</button>
         </div>
-        <div class="field">
-          <label>Password</label>
-          <input type="password" id="reg-password" placeholder="••••••••"/>
+
+        <!-- Step 2 -->
+        <div id="reg-step2" class="hidden">
+          <div style="font-family:var(--font-m);font-size:12px;color:var(--text2);margin-bottom:1.25rem;background:var(--surf2);border-radius:var(--rad-sm);padding:10px 12px;">
+            Creating account for <span id="reg-preview-name" style="color:var(--text);font-weight:600;"></span>
+            &nbsp;·&nbsp; <span id="reg-preview-handle" style="color:var(--accent);"></span>
+          </div>
+          <div class="field">
+            <label>Choose a password</label>
+            <div class="pw-wrap">
+              <input type="password" id="reg-password" placeholder="at least 6 characters"
+                autocomplete="new-password"
+                oninput="App.onPasswordInput(this.value)"
+                onkeydown="if(event.key==='Enter')App.register()"/>
+              <button class="pw-eye" type="button" onclick="App.togglePw('reg-password',this)" tabindex="-1">👁</button>
+            </div>
+            <div class="pw-strength-bar"><div id="pw-strength-fill"></div></div>
+            <div id="pw-strength-label" style="font-family:var(--font-m);font-size:10px;color:var(--text3);margin-top:3px;min-height:14px;"></div>
+          </div>
+          <div class="field-error" id="reg-error-2"></div>
+          <button class="btn-primary" id="reg-btn" onclick="App.register()">Create my account ⚡</button>
+          <p style="font-family:var(--font-m);font-size:11px;color:var(--text3);text-align:center;margin-top:10px;">
+            <a onclick="App.regBackStep()" style="color:var(--text2);cursor:pointer;">← change name / username</a>
+          </p>
         </div>
-        <div class="field-error" id="reg-error"></div>
-        <button class="btn-primary" onclick="App.register()">Create account →</button>
-        <p class="auth-switch">Already have one? <a onclick="App.showLogin()">Sign in</a></p>
+
+        <p class="auth-switch" style="margin-top:1rem;">Already have one? <a onclick="App.showLogin()">Sign in</a></p>
       </div>
+
     </div>
   </div>
 </div>
@@ -1214,11 +1336,127 @@ const App = (() => {
   function showLogin() {
     document.getElementById('form-login').classList.remove('hidden');
     document.getElementById('form-register').classList.add('hidden');
+    setTimeout(() => document.getElementById('login-username').focus(), 80);
   }
   function showRegister() {
     document.getElementById('form-login').classList.add('hidden');
     document.getElementById('form-register').classList.remove('hidden');
+    regGoStep(1);
+    setTimeout(() => document.getElementById('reg-name').focus(), 80);
   }
+
+  function togglePw(inputId, btn) {
+    const inp = document.getElementById(inputId);
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.style.opacity = show ? '1' : '0.6';
+  }
+
+  /* ── 2-step register flow ── */
+  let _usernameCheckTimer = null;
+  let _usernameOk = false;
+
+  function regGoStep(n) {
+    document.getElementById('reg-step1').classList.toggle('hidden', n !== 1);
+    document.getElementById('reg-step2').classList.toggle('hidden', n !== 2);
+    document.getElementById('rstep-1').className = 'reg-step' + (n === 1 ? ' active' : ' done');
+    document.getElementById('rstep-2').className = 'reg-step' + (n === 2 ? ' active' : '');
+  }
+
+  function onRegNameInput(val) {
+    // Auto-generate a username from the name
+    const suggested = val.trim().toLowerCase()
+      .replace(/[^a-z0-9 ]/g, '')
+      .split(' ')
+      .filter(Boolean)
+      .join('_')
+      .slice(0, 20);
+    const uField = document.getElementById('reg-username');
+    uField.value = suggested;
+    if (suggested) onUsernameInput(suggested);
+  }
+
+  function onUsernameInput(val) {
+    const statusEl = document.getElementById('username-status');
+    const cleaned  = val.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    document.getElementById('reg-username').value = cleaned;
+    _usernameOk = false;
+
+    if (!cleaned || cleaned.length < 2) {
+      statusEl.textContent = '';
+      return;
+    }
+    if (!cleaned.match(/^[a-z0-9_]{2,20}$/)) {
+      statusEl.textContent = '✕ invalid';
+      statusEl.className = 'us-taken';
+      return;
+    }
+
+    statusEl.textContent = 'checking…';
+    statusEl.className = 'us-checking';
+    clearTimeout(_usernameCheckTimer);
+    _usernameCheckTimer = setTimeout(async () => {
+      const snap = await rtdb.ref('usernames/' + cleaned).get();
+      if (snap.exists()) {
+        statusEl.textContent = '✕ taken';
+        statusEl.className = 'us-taken';
+        _usernameOk = false;
+      } else {
+        statusEl.textContent = '✓ available';
+        statusEl.className = 'us-free';
+        _usernameOk = true;
+      }
+    }, 450);
+  }
+
+  function onPasswordInput(val) {
+    const fill  = document.getElementById('pw-strength-fill');
+    const label = document.getElementById('pw-strength-label');
+    if (!fill) return;
+    let score = 0;
+    if (val.length >= 6)  score++;
+    if (val.length >= 10) score++;
+    if (/[A-Z]/.test(val) || /[0-9]/.test(val)) score++;
+    if (/[^a-zA-Z0-9]/.test(val)) score++;
+    const levels = [
+      { w: '0%',   bg: 'transparent',       t: '' },
+      { w: '30%',  bg: 'var(--danger)',      t: 'Weak' },
+      { w: '55%',  bg: 'var(--warn)',        t: 'Fair' },
+      { w: '80%',  bg: '#b6ff6a',            t: 'Good' },
+      { w: '100%', bg: 'var(--accent)',      t: 'Strong ✓' },
+    ];
+    const l = levels[score] || levels[0];
+    fill.style.width      = l.w;
+    fill.style.background = l.bg;
+    label.textContent     = l.t;
+    label.style.color     = l.bg !== 'transparent' ? l.bg : 'var(--text3)';
+  }
+
+  async function regNextStep() {
+    const name     = document.getElementById('reg-name').value.trim();
+    const username = document.getElementById('reg-username').value.trim();
+    const errEl    = document.getElementById('reg-error-1');
+    errEl.textContent = '';
+
+    if (!name)           { errEl.textContent = 'Enter your name'; return; }
+    if (username.length < 2) { errEl.textContent = 'Username too short (min 2 chars)'; return; }
+    if (!username.match(/^[a-z0-9_]{2,20}$/)) {
+      errEl.textContent = 'Username: letters, numbers, underscores only'; return;
+    }
+    if (!_usernameOk) {
+      // force a final check if debounce hasn't resolved yet
+      const snap = await rtdb.ref('usernames/' + username).get();
+      if (snap.exists()) { errEl.textContent = 'Username already taken — try another'; return; }
+      _usernameOk = true;
+    }
+
+    document.getElementById('reg-preview-name').textContent   = name;
+    document.getElementById('reg-preview-handle').textContent = '@' + username;
+    regGoStep(2);
+    setTimeout(() => document.getElementById('reg-password').focus(), 80);
+  }
+
+  function regBackStep() { regGoStep(1); }
 
   /* ════════════════════════════════
      AUTH — Login
@@ -1251,16 +1489,16 @@ const App = (() => {
     const name     = document.getElementById('reg-name').value.trim();
     const username = document.getElementById('reg-username').value.trim().toLowerCase();
     const password = document.getElementById('reg-password').value;
-    const errEl    = document.getElementById('reg-error');
+    const errEl    = document.getElementById('reg-error-2');
     errEl.textContent = '';
-    if (!name)     { errEl.textContent = 'Enter your name'; return; }
-    if (!username.match(/^[a-z0-9_]{2,20}$/)) {
-      errEl.textContent = 'Username: 2-20 lowercase letters, numbers, _'; return;
-    }
     if (password.length < 6) { errEl.textContent = 'Password must be at least 6 characters'; return; }
 
+    const btn = document.getElementById('reg-btn');
+    btn.disabled = true;
+    btn.textContent = 'Creating…';
+
     const taken = await rtdb.ref('usernames/' + username).get();
-    if (taken.exists()) { errEl.textContent = 'Username already taken'; return; }
+    if (taken.exists()) { errEl.textContent = 'Username already taken'; btn.disabled=false; btn.textContent='Create my account ⚡'; return; }
 
     try {
       const cred = await fbAuth.createUserWithEmailAndPassword(toEmail(username), password);
@@ -1277,7 +1515,11 @@ const App = (() => {
       await rtdb.ref('usernames/' + username).set(uid);
       currentUser = profile;
       enterApp();
-    } catch(e) { errEl.textContent = e.message; }
+    } catch(e) {
+      errEl.textContent = e.message;
+      btn.disabled = false;
+      btn.textContent = 'Create my account ⚡';
+    }
   }
 
   /* ════════════════════════════════
@@ -1948,6 +2190,8 @@ const App = (() => {
   return {
     login, register, demoLogin, logout,
     showLogin, showRegister,
+    togglePw, onRegNameInput, onUsernameInput, onPasswordInput,
+    regNextStep, regBackStep,
     setTab,
     sendCharge,
     openAddContact, searchUsers, addContact,
